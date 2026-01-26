@@ -1,0 +1,8 @@
+{
+  "name": "AetherTrade AI",
+  "description": "An advanced AI-powered trading platform featuring real-time market insights, strategy generation, and a live voice-enabled assistant.",
+  "requestFramePermissions": [
+    "microphone",
+    "camera"
+  ]
+}
