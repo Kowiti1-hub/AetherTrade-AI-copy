@@ -19,6 +19,7 @@ const App: React.FC = () => {
   const [authView, setAuthView] = useState<AuthView>(AuthView.LANDING);
   const [activeView, setActiveView] = useState<AppView>(AppView.DASHBOARD);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isDemoMode, setIsDemoMode] = useState(true);
   const [theme, setTheme] = useState<Theme>(() => {
     const saved = localStorage.getItem('theme') as Theme;
     return saved || 'dark';
@@ -108,7 +109,7 @@ const App: React.FC = () => {
               <NavItem 
                 view={AppView.DEMO_TRADING} 
                 icon={() => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>} 
-                label="Demo Training" 
+                label="Binary Options" 
                 color="amber"
               />
               <NavItem 
@@ -144,12 +145,30 @@ const App: React.FC = () => {
 
       <main className="flex-1 flex flex-col relative overflow-hidden">
         <header className="h-16 border-b border-slate-200 dark:border-slate-800 bg-white/30 dark:bg-slate-900/30 backdrop-blur-sm flex items-center justify-between px-8 z-10 transition-colors">
-          <div className="flex items-center space-x-2">
-            <span className="text-slate-500 font-medium capitalize">{user.role.toLowerCase()}</span>
-            <span className="text-slate-300 dark:text-slate-700">/</span>
-            <span className={`font-semibold uppercase tracking-wider text-sm ${activeView === AppView.DEMO_TRADING ? 'text-amber-500 dark:text-amber-400' : 'text-sky-600 dark:text-sky-400'}`}>
-              {activeView.replace(/_/g, ' ')}
-            </span>
+          <div className="flex items-center space-x-6">
+            <div className="flex items-center space-x-2">
+              <span className="text-slate-500 font-medium capitalize">{user.role.toLowerCase()}</span>
+              <span className="text-slate-300 dark:text-slate-700">/</span>
+              <span className={`font-semibold uppercase tracking-wider text-sm ${activeView === AppView.DEMO_TRADING ? 'text-amber-500 dark:text-amber-400' : 'text-sky-600 dark:text-sky-400'}`}>
+                {activeView.replace(/_/g, ' ')}
+              </span>
+            </div>
+
+            {/* Cabinet Style Balance Switcher */}
+            <div className="hidden md:flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+               <button 
+                onClick={() => setIsDemoMode(false)}
+                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${!isDemoMode ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
+               >
+                 Real: ${user.balance?.toLocaleString()}
+               </button>
+               <button 
+                onClick={() => setIsDemoMode(true)}
+                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${isDemoMode ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
+               >
+                 Demo: ${user.demoBalance?.toLocaleString()}
+               </button>
+            </div>
           </div>
 
           <div className="flex items-center space-x-4">

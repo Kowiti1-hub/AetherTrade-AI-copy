@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+
+import React, { useState, useRef, useEffect } from 'react';
 import { gemini } from '../services/geminiService';
 import { TradingStrategy } from '../types';
 import { 
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area 
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, ReferenceLine
 } from 'recharts';
 
 interface BacktestResult {
@@ -12,7 +13,15 @@ interface BacktestResult {
   profitFactor: number;
   maxDrawdown: number;
   totalTrades: number;
-  equityCurve: { x: number, y: number }[];
+  equityCurve: { x: number, y: number, label: string }[];
+}
+
+type ToolType = 'none' | 'trendline' | 'horizontal' | 'fibonacci';
+
+interface Drawing {
+  type: ToolType;
+  points: { x: number, y: number }[];
+  id: string;
 }
 
 const StrategyBuilder: React.FC = () => {
@@ -22,6 +31,12 @@ const StrategyBuilder: React.FC = () => {
   const [isBacktesting, setIsBacktesting] = useState(false);
   const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(null);
 
+  // Drawing Tools State
+  const [activeTool, setActiveTool] = useState<ToolType>('none');
+  const [drawings, setDrawings] = useState<Drawing[]>([]);
+  const [currentDrawing, setCurrentDrawing] = useState<Drawing | null>(null);
+  const chartRef = useRef<HTMLDivElement>(null);
+
   // Simulation Parameters
   const [startDate, setStartDate] = useState('2024-01-01');
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
@@ -30,7 +45,8 @@ const StrategyBuilder: React.FC = () => {
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
     setLoading(true);
-    setBacktestResult(null); // Reset backtest on new strategy
+    setBacktestResult(null);
+    setDrawings([]);
     try {
       const res = await gemini.generateStrategy(prompt);
       setStrategy(res);
@@ -45,21 +61,18 @@ const StrategyBuilder: React.FC = () => {
     if (!strategy) return;
     setIsBacktesting(true);
     setBacktestResult(null);
+    setDrawings([]);
 
     const capital = parseFloat(initialCapital) || 10000;
     const start = new Date(startDate).getTime();
     const end = new Date(endDate).getTime();
     const daysDiff = Math.max(1, (end - start) / (1000 * 60 * 60 * 24));
 
-    // Simulate institution-grade backtesting latency
     setTimeout(() => {
       const riskMultiplier = strategy.riskProfile === 'High' ? 2.5 : strategy.riskProfile === 'Medium' ? 1.5 : 0.8;
-      
-      // Seeded random simulation based on strategy metadata and time period
       const profitPercentage = parseFloat((Math.random() * 15 * riskMultiplier * (daysDiff / 365) + 5).toFixed(2));
       const netProfitUSD = (capital * profitPercentage) / 100;
 
-      // Generate a more detailed equity curve
       const steps = 30;
       let currentEquity = capital;
       const equityCurve = Array.from({ length: steps }, (_, i) => {
@@ -68,7 +81,7 @@ const StrategyBuilder: React.FC = () => {
         return { 
           x: i, 
           y: parseFloat(currentEquity.toFixed(2)),
-          label: `Step ${i}` 
+          label: `Day ${i + 1}` 
         };
       });
 
@@ -87,10 +100,73 @@ const StrategyBuilder: React.FC = () => {
     }, 2500);
   };
 
+  // Drawing Logic
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (activeTool === 'none' || !chartRef.current) return;
+    const rect = chartRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    setCurrentDrawing({
+      type: activeTool,
+      points: [{ x, y }],
+      id: Math.random().toString(36).substr(2, 9)
+    });
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!currentDrawing || !chartRef.current) return;
+    const rect = chartRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    setCurrentDrawing({
+      ...currentDrawing,
+      points: [currentDrawing.points[0], { x, y }]
+    });
+  };
+
+  const handleMouseUp = () => {
+    if (currentDrawing) {
+      setDrawings([...drawings, currentDrawing]);
+      setCurrentDrawing(null);
+    }
+  };
+
+  const clearDrawings = () => setDrawings([]);
+
+  const FibonacciLevels = ({ y1, y2, x1, x2 }: { y1: number, y2: number, x1: number, x2: number }) => {
+    const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
+    const diff = y2 - y1;
+    return (
+      <g>
+        {levels.map(level => {
+          const y = y1 + diff * level;
+          return (
+            <g key={level}>
+              <line 
+                x1={Math.min(x1, x2)} 
+                y1={y} 
+                x2={Math.max(x1, x2)} 
+                y2={y} 
+                stroke="rgba(14, 165, 233, 0.4)" 
+                strokeWidth="1" 
+                strokeDasharray="4 2" 
+              />
+              <text x={Math.max(x1, x2) + 5} y={y + 3} fill="rgba(14, 165, 233, 0.6)" fontSize="9" className="font-mono">
+                {level === 0 ? 'START' : level === 1 ? 'END' : level.toString()}
+              </text>
+            </g>
+          );
+        })}
+        <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="rgba(14, 165, 233, 0.2)" strokeWidth="1" />
+      </g>
+    );
+  };
+
   return (
     <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-12 transition-colors">
       <div className="flex flex-col xl:flex-row gap-8">
-        {/* Left Column: Input and Architect */}
         <div className="flex-1 space-y-6">
           <div className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 p-8 rounded-3xl backdrop-blur-md shadow-xl transition-colors">
             <div className="flex items-center space-x-3 mb-4">
@@ -153,7 +229,7 @@ const StrategyBuilder: React.FC = () => {
           </div>
 
           {strategy && (isBacktesting || backtestResult) && (
-            <div className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-[2rem] p-8 shadow-2xl animate-in fade-in duration-500 transition-colors">
+            <div className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] p-8 shadow-2xl animate-in fade-in duration-500 transition-colors">
               <div className="flex items-center justify-between mb-8">
                 <div>
                   <h3 className="text-xl font-bold text-slate-900 dark:text-white">Strategy Backtest Performance</h3>
@@ -173,16 +249,9 @@ const StrategyBuilder: React.FC = () => {
                     <div className="h-full bg-violet-500 animate-[loading_2s_ease-in-out_infinite] w-1/2"></div>
                   </div>
                   <p className="text-xs text-slate-500 font-mono italic">Ingesting historical ticks and volatility matrices...</p>
-                  <style>{`
-                    @keyframes loading {
-                      0% { transform: translateX(-100%); }
-                      100% { transform: translateX(200%); }
-                    }
-                  `}</style>
                 </div>
               ) : backtestResult && (
                 <div className="space-y-10">
-                  {/* Stats Grid */}
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                     <div className="p-4 bg-slate-50 dark:bg-slate-950/40 rounded-2xl border border-slate-100 dark:border-slate-800/50">
                       <div className="text-[10px] text-slate-400 font-bold mb-1 uppercase tracking-tighter">Net Profit</div>
@@ -216,48 +285,141 @@ const StrategyBuilder: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Equity Curve Chart */}
-                  <div className="h-[400px] w-full bg-slate-50/50 dark:bg-slate-950/20 rounded-3xl p-6 border border-slate-100 dark:border-slate-800/50">
-                    <div className="flex items-center justify-between mb-4">
-                      <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Equity Growth Curve</h4>
-                      <div className="flex items-center space-x-4 text-[10px] text-slate-500">
-                        <span className="flex items-center"><div className="w-2 h-2 bg-emerald-500 rounded-full mr-1.5"></div> Project Equity</span>
-                      </div>
+                  <div className="relative h-[500px] w-full bg-slate-50/50 dark:bg-slate-950/20 rounded-3xl p-6 border border-slate-100 dark:border-slate-800/50 flex transition-all">
+                    {/* Drawing Toolbar */}
+                    <div className="w-12 border-r border-slate-200 dark:border-slate-800 pr-4 mr-4 flex flex-col space-y-3 shrink-0">
+                       <button 
+                        onClick={() => setActiveTool('none')}
+                        className={`p-2.5 rounded-xl transition-all ${activeTool === 'none' ? 'bg-sky-500 text-white' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
+                        title="Pointer"
+                       >
+                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m3 3 7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/><path d="m13 13 6 6"/></svg>
+                       </button>
+                       <button 
+                        onClick={() => setActiveTool('trendline')}
+                        className={`p-2.5 rounded-xl transition-all ${activeTool === 'trendline' ? 'bg-sky-500 text-white' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
+                        title="Trendline"
+                       >
+                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="19" x2="5" y1="5" y2="19"/><circle cx="19" cy="5" r="2"/><circle cx="5" cy="19" r="2"/></svg>
+                       </button>
+                       <button 
+                        onClick={() => setActiveTool('horizontal')}
+                        className={`p-2.5 rounded-xl transition-all ${activeTool === 'horizontal' ? 'bg-sky-500 text-white' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
+                        title="Horizontal Line"
+                       >
+                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="3" x2="21" y1="12" y2="12"/><circle cx="12" cy="12" r="2"/></svg>
+                       </button>
+                       <button 
+                        onClick={() => setActiveTool('fibonacci')}
+                        className={`p-2.5 rounded-xl transition-all ${activeTool === 'fibonacci' ? 'bg-sky-500 text-white' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
+                        title="Fibonacci Retracement"
+                       >
+                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/><path d="M12 3v18"/></svg>
+                       </button>
+                       <div className="pt-4 mt-4 border-t border-slate-200 dark:border-slate-800">
+                          <button 
+                            onClick={clearDrawings}
+                            className="p-2.5 rounded-xl text-rose-500 hover:bg-rose-500/10 transition-all"
+                            title="Clear All Drawings"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+                          </button>
+                       </div>
                     </div>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={backtestResult.equityCurve}>
-                        <defs>
-                          <linearGradient id="equityGradient" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.2}/>
-                            <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-slate-200 dark:text-slate-800" vertical={false} />
-                        <XAxis dataKey="x" hide />
-                        <YAxis 
-                          domain={['auto', 'auto']} 
-                          fontSize={10} 
-                          tickLine={false} 
-                          axisLine={false} 
-                          stroke="#64748b"
-                          tickFormatter={(val) => `$${val.toLocaleString()}`}
-                        />
-                        <Tooltip 
-                          contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '12px', fontSize: '12px' }}
-                          itemStyle={{ color: '#10b981' }}
-                          formatter={(value) => [`$${value.toLocaleString()}`, 'Equity']}
-                          labelStyle={{ display: 'none' }}
-                        />
-                        <Area 
-                          type="monotone" 
-                          dataKey="y" 
-                          stroke="#10b981" 
-                          strokeWidth={3} 
-                          fill="url(#equityGradient)" 
-                          animationDuration={1500}
-                        />
-                      </AreaChart>
-                    </ResponsiveContainer>
+
+                    <div className="flex-1 relative" ref={chartRef}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={backtestResult.equityCurve}>
+                          <defs>
+                            <linearGradient id="equityGradient" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#10b981" stopOpacity={0.2}/>
+                              <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-slate-200 dark:text-slate-800" vertical={false} />
+                          <XAxis dataKey="x" hide />
+                          <YAxis 
+                            domain={['auto', 'auto']} 
+                            fontSize={10} 
+                            tickLine={false} 
+                            axisLine={false} 
+                            stroke="#64748b"
+                            tickFormatter={(val) => `$${val.toLocaleString()}`}
+                          />
+                          <Tooltip 
+                            contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '12px', fontSize: '12px' }}
+                            itemStyle={{ color: '#10b981' }}
+                            formatter={(value) => [`$${value.toLocaleString()}`, 'Equity']}
+                            labelStyle={{ display: 'none' }}
+                          />
+                          <Area 
+                            type="monotone" 
+                            dataKey="y" 
+                            stroke="#10b981" 
+                            strokeWidth={3} 
+                            fill="url(#equityGradient)" 
+                            animationDuration={1500}
+                          />
+                        </AreaChart>
+                      </ResponsiveContainer>
+
+                      {/* SVG Drawing Layer */}
+                      <svg 
+                        className="absolute inset-0 pointer-events-auto cursor-crosshair"
+                        onMouseDown={handleMouseDown}
+                        onMouseMove={handleMouseMove}
+                        onMouseUp={handleMouseUp}
+                        style={{ display: activeTool === 'none' ? 'none' : 'block' }}
+                      >
+                        {[...drawings, ...(currentDrawing ? [currentDrawing] : [])].map((drawing) => {
+                          if (drawing.points.length < 2 && drawing.type !== 'horizontal') return null;
+                          const p1 = drawing.points[0];
+                          const p2 = drawing.points[1] || p1;
+
+                          switch (drawing.type) {
+                            case 'trendline':
+                              return (
+                                <line 
+                                  key={drawing.id}
+                                  x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
+                                  stroke="#0ea5e9" strokeWidth="2" strokeLinecap="round"
+                                />
+                              );
+                            case 'horizontal':
+                              return (
+                                <line 
+                                  key={drawing.id}
+                                  x1="0" y1={p1.y} x2="100%" y2={p1.y}
+                                  stroke="#f59e0b" strokeWidth="2" strokeDasharray="5 5"
+                                />
+                              );
+                            case 'fibonacci':
+                              return <FibonacciLevels key={drawing.id} x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} />;
+                            default:
+                              return null;
+                          }
+                        })}
+                      </svg>
+                      
+                      {/* Read-only drawings (displayed when tool is none) */}
+                      {activeTool === 'none' && (
+                         <svg className="absolute inset-0 pointer-events-none">
+                            {drawings.map((drawing) => {
+                              const p1 = drawing.points[0];
+                              const p2 = drawing.points[1] || p1;
+                              switch (drawing.type) {
+                                case 'trendline':
+                                  return <line key={drawing.id} x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke="#0ea5e9" strokeWidth="2" strokeOpacity="0.6" />;
+                                case 'horizontal':
+                                  return <line key={drawing.id} x1="0" y1={p1.y} x2="100%" y2={p1.y} stroke="#f59e0b" strokeWidth="2" strokeDasharray="5 5" strokeOpacity="0.6" />;
+                                case 'fibonacci':
+                                  return <FibonacciLevels key={drawing.id} x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} />;
+                                default: return null;
+                              }
+                            })}
+                         </svg>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
@@ -265,7 +427,6 @@ const StrategyBuilder: React.FC = () => {
           )}
         </div>
 
-        {/* Right Column: Strategy Output */}
         <div className="w-full lg:w-[400px] flex flex-col space-y-6 shrink-0">
           {strategy ? (
             <div className="flex-1 flex flex-col space-y-6 animate-in zoom-in-95 duration-500">

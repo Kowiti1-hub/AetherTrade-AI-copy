@@ -27,6 +27,12 @@ const CURRENCIES = [
   { code: 'AUD', symbol: 'A$', label: 'Australian Dollar' },
 ];
 
+// Institutional Withdrawal Policy Limits
+const WITHDRAWAL_LIMITS = {
+  SINGLE_TX: 10000,
+  DAILY_TOTAL: 25000,
+};
+
 const TraderWallet: React.FC<TraderWalletProps> = ({ user }) => {
   const [activeTab, setActiveTab] = useState<TransactionType>('DEPOSIT');
   const [amount, setAmount] = useState('');
@@ -35,6 +41,7 @@ const TraderWallet: React.FC<TraderWalletProps> = ({ user }) => {
   const [selectedMethodId, setSelectedMethodId] = useState<string>('');
   const [pending, setPending] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
   
   const [showAddMethod, setShowAddMethod] = useState(false);
   const [newMethodType, setNewMethodType] = useState<PaymentMethodType>('BANK');
@@ -74,6 +81,18 @@ const TraderWallet: React.FC<TraderWalletProps> = ({ user }) => {
       timestamp: Date.now() - 86400000 * 7,
       methodType: 'PAYPAL', 
       destinationDetails: 'user@example.com' 
+    },
+    { 
+      id: 'TX-202', 
+      userId: user.id, 
+      username: user.username, 
+      amount: 2500, 
+      type: 'DEPOSIT',
+      status: 'COMPLETED', 
+      timestamp: Date.now() - 86400000 * 1,
+      methodType: 'BANK', 
+      destinationDetails: 'Global Inbound - EUR',
+      currency: 'EUR'
     }
   ]);
 
@@ -89,10 +108,48 @@ const TraderWallet: React.FC<TraderWalletProps> = ({ user }) => {
     return 'Local Mobile Wallet';
   }, [user.country]);
 
+  // Calculate today's withdrawal volume to enforce daily limits
+  const dailyWithdrawalUsage = useMemo(() => {
+    const startOfToday = new Date().setHours(0, 0, 0, 0);
+    return history
+      .filter(tx => tx.type === 'WITHDRAWAL' && tx.timestamp >= startOfToday && tx.status !== 'REJECTED')
+      .reduce((sum, tx) => sum + tx.amount, 0);
+  }, [history]);
+
+  const dailyUsagePercentage = Math.min(100, (dailyWithdrawalUsage / WITHDRAWAL_LIMITS.DAILY_TOTAL) * 100);
+
   const handleTransaction = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!amount || parseFloat(amount) <= 0) return;
-    if (activeTab === 'WITHDRAWAL' && !selectedMethodId) return;
+    setValidationError(null);
+    
+    const numAmount = parseFloat(amount);
+    if (!amount || numAmount <= 0) return;
+
+    if (activeTab === 'WITHDRAWAL') {
+      if (!selectedMethodId) {
+        setValidationError("Please select a linked payout destination.");
+        return;
+      }
+
+      // Check against User Balance
+      if (numAmount > (user.balance || 0)) {
+        setValidationError(`Insufficient balance. Maximum available: $${(user.balance || 0).toLocaleString()}.`);
+        return;
+      }
+
+      // Check single transaction limit
+      if (numAmount > WITHDRAWAL_LIMITS.SINGLE_TX) {
+        setValidationError(`Transaction limit exceeded. Maximum per withdrawal is $${WITHDRAWAL_LIMITS.SINGLE_TX.toLocaleString()}.`);
+        return;
+      }
+
+      // Check daily total limit
+      if (dailyWithdrawalUsage + numAmount > WITHDRAWAL_LIMITS.DAILY_TOTAL) {
+        const remaining = Math.max(0, WITHDRAWAL_LIMITS.DAILY_TOTAL - dailyWithdrawalUsage);
+        setValidationError(`Daily withdrawal limit of $${WITHDRAWAL_LIMITS.DAILY_TOTAL.toLocaleString()} reached. Remaining allowance today: $${remaining.toLocaleString()}.`);
+        return;
+      }
+    }
     
     setPending(true);
     setTimeout(() => {
@@ -100,7 +157,7 @@ const TraderWallet: React.FC<TraderWalletProps> = ({ user }) => {
         id: `TX-${Math.floor(Math.random() * 900) + 100}`,
         userId: user.id,
         username: user.username,
-        amount: parseFloat(amount),
+        amount: numAmount,
         type: activeTab,
         status: activeTab === 'DEPOSIT' ? 'COMPLETED' : 'PENDING',
         timestamp: Date.now(),
@@ -132,6 +189,59 @@ const TraderWallet: React.FC<TraderWalletProps> = ({ user }) => {
     setShowAddMethod(false);
   };
 
+  const TransactionItem = ({ tx }: { tx: TransactionRecord }) => (
+    <div key={tx.id} className="p-6 bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 rounded-3xl flex flex-col md:flex-row items-center justify-between group hover:border-slate-400 dark:hover:border-slate-700 transition-all gap-6">
+      <div className="flex items-center space-x-5 w-full md:w-auto">
+         <div className={`w-12 h-12 rounded-xl flex items-center justify-center border ${
+           tx.type === 'DEPOSIT' 
+            ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' 
+            : tx.status === 'REJECTED' 
+              ? 'bg-rose-500/10 text-rose-600 border-rose-500/20'
+              : 'bg-sky-500/10 text-sky-600 border-sky-500/20'
+         }`}>
+            {tx.type === 'DEPOSIT' ? (
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
+            )}
+         </div>
+         <div>
+           <div className="flex items-center space-x-2 mb-0.5">
+             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{tx.id}</span>
+             <span className="text-slate-300 dark:text-slate-800 text-xs">|</span>
+             <span className={`text-[9px] font-black uppercase tracking-tighter px-2 py-0.5 rounded-md border ${
+               tx.status === 'APPROVED' || tx.status === 'COMPLETED' ? 'bg-emerald-500/5 text-emerald-500 border-emerald-500/10' : tx.status === 'REJECTED' ? 'bg-rose-500/5 text-rose-500 border-rose-500/10' : 'bg-amber-500/5 text-amber-500 border-amber-500/10'
+             }`}>
+               {tx.status}
+             </span>
+           </div>
+           <div className="font-bold text-slate-800 dark:text-slate-200">{tx.type}</div>
+           <div className="text-[10px] text-slate-500 font-mono mt-0.5">{tx.destinationDetails}</div>
+         </div>
+      </div>
+
+      <div className="flex items-center justify-between w-full md:w-auto md:space-x-12">
+         <div className="text-left md:text-right">
+            <div className="text-[10px] text-slate-400 uppercase font-black tracking-widest mb-1">Trace Date</div>
+            <div className="text-xs font-bold text-slate-600 dark:text-slate-400 font-mono">
+              {new Date(tx.timestamp).toLocaleDateString()}
+            </div>
+         </div>
+         <div className="text-right">
+            <div className="text-[10px] text-slate-400 uppercase font-black tracking-widest mb-1">Net Amount</div>
+            <div className={`text-xl font-black font-mono tracking-tight ${tx.type === 'DEPOSIT' ? 'text-emerald-500' : 'text-slate-900 dark:text-white'}`}>
+              {tx.type === 'DEPOSIT' ? '+' : '-'}${tx.amount.toLocaleString()}
+              {tx.currency && tx.currency !== 'USD' && <span className="text-[10px] ml-1 opacity-50">{tx.currency}</span>}
+            </div>
+         </div>
+      </div>
+    </div>
+  );
+
+  const depositHistory = history.filter(tx => tx.type === 'DEPOSIT');
+  const activeWithdrawals = history.filter(tx => tx.type === 'WITHDRAWAL' && tx.status === 'PENDING');
+  const pastWithdrawals = history.filter(tx => tx.type === 'WITHDRAWAL' && (tx.status === 'APPROVED' || tx.status === 'REJECTED'));
+
   return (
     <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-700 pb-20">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -154,7 +264,7 @@ const TraderWallet: React.FC<TraderWalletProps> = ({ user }) => {
                {linkedAccounts.map(acc => (
                  <button 
                   key={acc.id}
-                  onClick={() => { setSelectedMethodId(acc.id); setActiveTab('WITHDRAWAL'); }}
+                  onClick={() => { setSelectedMethodId(acc.id); setActiveTab('WITHDRAWAL'); setValidationError(null); }}
                   className={`w-full text-left p-4 rounded-2xl border transition-all group relative overflow-hidden ${selectedMethodId === acc.id && activeTab === 'WITHDRAWAL' ? 'bg-sky-500/10 border-sky-500/50' : 'bg-slate-50 dark:bg-slate-950/40 border-slate-200 dark:border-slate-800 hover:border-sky-500/30 dark:hover:border-slate-700'}`}
                  >
                    <div className="flex justify-between items-start relative z-10">
@@ -183,18 +293,41 @@ const TraderWallet: React.FC<TraderWalletProps> = ({ user }) => {
 
         {/* Right: Deposit/Withdraw Form */}
         <div className="lg:col-span-2 space-y-8">
-          <div className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 p-10 rounded-[2.5rem] backdrop-blur-md shadow-sm">
+          <div className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 p-10 rounded-[2.5rem] backdrop-blur-md shadow-sm relative overflow-hidden">
             
+            {/* Limit Gauge Banner (Visible only for Withdrawals) */}
+            {activeTab === 'WITHDRAWAL' && !success && (
+              <div className="absolute top-0 right-0 p-10 hidden xl:block animate-in slide-in-from-right duration-500">
+                <div className="w-48 space-y-3">
+                  <div className="flex justify-between items-end">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Daily Limit</span>
+                    <span className={`text-[10px] font-mono font-bold ${dailyUsagePercentage > 80 ? 'text-rose-500' : 'text-sky-500'}`}>
+                      {dailyUsagePercentage.toFixed(0)}% Consumed
+                    </span>
+                  </div>
+                  <div className="h-2 w-full bg-slate-100 dark:bg-slate-950 rounded-full overflow-hidden border border-slate-200 dark:border-slate-800">
+                    <div 
+                      className={`h-full transition-all duration-1000 rounded-full ${dailyUsagePercentage > 80 ? 'bg-rose-500' : 'bg-sky-500'}`}
+                      style={{ width: `${dailyUsagePercentage}%` }}
+                    ></div>
+                  </div>
+                  <div className="text-[9px] text-slate-500 italic text-right">
+                    Remaining: ${(WITHDRAWAL_LIMITS.DAILY_TOTAL - dailyWithdrawalUsage).toLocaleString()}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Tab Switcher */}
             <div className="flex p-1 bg-slate-100 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 mb-10 w-full sm:w-fit">
               <button 
-                onClick={() => { setActiveTab('DEPOSIT'); setSuccess(false); }}
+                onClick={() => { setActiveTab('DEPOSIT'); setSuccess(false); setValidationError(null); }}
                 className={`px-8 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'DEPOSIT' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`}
               >
                 Deposit
               </button>
               <button 
-                onClick={() => { setActiveTab('WITHDRAWAL'); setSuccess(false); }}
+                onClick={() => { setActiveTab('WITHDRAWAL'); setSuccess(false); setValidationError(null); }}
                 className={`px-8 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'WITHDRAWAL' ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/20' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`}
               >
                 Withdraw
@@ -246,11 +379,10 @@ const TraderWallet: React.FC<TraderWalletProps> = ({ user }) => {
                         <input 
                           type="number" 
                           value={amount}
-                          onChange={e => setAmount(e.target.value)}
-                          className={`w-full bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800 rounded-2xl px-6 py-4 text-2xl font-mono focus:border-${activeTab === 'DEPOSIT' ? 'emerald' : 'sky'}-500 outline-none transition-all placeholder:text-slate-200 dark:placeholder:text-slate-800 text-slate-900 dark:text-white`}
+                          onChange={e => { setAmount(e.target.value); setValidationError(null); }}
+                          className={`w-full bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800 rounded-2xl px-6 py-4 text-2xl font-mono focus:border-${activeTab === 'DEPOSIT' ? 'emerald' : 'sky'}-500 outline-none transition-all placeholder:text-slate-200 dark:placeholder:text-slate-800 text-slate-900 dark:text-white ${validationError ? 'border-rose-500/50 ring-4 ring-rose-500/10' : ''}`}
                           placeholder="0.00"
                           required
-                          max={activeTab === 'WITHDRAWAL' ? user.balance : undefined}
                         />
                         <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-600 font-bold text-xs">
                           {activeTab === 'DEPOSIT' ? currency : 'USD'}
@@ -289,6 +421,24 @@ const TraderWallet: React.FC<TraderWalletProps> = ({ user }) => {
                   </div>
                 </div>
 
+                {/* Validation Error Feedback */}
+                {validationError && (
+                  <div className="p-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl flex items-start space-x-3 animate-in slide-in-from-top-2 duration-300">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="text-rose-500 mt-0.5 shrink-0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    <div className="text-xs font-bold text-rose-600 dark:text-rose-400 leading-tight">{validationError}</div>
+                  </div>
+                )}
+
+                {/* Real-time Policy Insights (Only for Withdrawals) */}
+                {activeTab === 'WITHDRAWAL' && !validationError && amount && (
+                   <div className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl flex items-center space-x-3 animate-in fade-in duration-300">
+                      <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                      <span className="text-[10px] font-black uppercase text-emerald-600 dark:text-emerald-500 tracking-widest">
+                        Transaction Parameters Verified • Safe to Authorize
+                      </span>
+                   </div>
+                )}
+
                 <div className="p-6 bg-slate-50 dark:bg-slate-950/50 rounded-2xl border border-slate-200 dark:border-slate-800/50 flex items-center space-x-4">
                   <div className={`p-3 bg-${activeTab === 'DEPOSIT' ? 'emerald' : 'amber'}-500/10 text-${activeTab === 'DEPOSIT' ? 'emerald' : 'amber'}-600 dark:text-${activeTab === 'DEPOSIT' ? 'emerald' : 'amber'}-500 rounded-xl`}>
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
@@ -296,12 +446,12 @@ const TraderWallet: React.FC<TraderWalletProps> = ({ user }) => {
                   <div className="text-xs text-slate-500 dark:text-slate-500 leading-relaxed">
                     {activeTab === 'DEPOSIT' 
                       ? `Global deposits in ${currency} are processed via secure institutional gateways. Funds from ${depositCountry || 'any country'} are typically cleared instantly.`
-                      : `Capital disbursements are subject to 2FA verification. Authorized transfers to ${selectedMethodId ? linkedAccounts.find(a => a.id === selectedMethodId)?.provider : 'the selected bank'} are irreversible.`}
+                      : `Policy: Max $${WITHDRAWAL_LIMITS.SINGLE_TX.toLocaleString()} per TX, $${WITHDRAWAL_LIMITS.DAILY_TOTAL.toLocaleString()} per day. Current usage: $${dailyWithdrawalUsage.toLocaleString()}.`}
                   </div>
                 </div>
 
                 <button 
-                  disabled={pending || (activeTab === 'WITHDRAWAL' && !selectedMethodId) || !amount}
+                  disabled={pending || (activeTab === 'WITHDRAWAL' && !selectedMethodId) || !amount || (activeTab === 'WITHDRAWAL' && !!validationError)}
                   className={`w-full py-5 bg-gradient-to-r ${activeTab === 'DEPOSIT' ? 'from-emerald-500 to-teal-600' : 'from-sky-500 to-violet-600'} text-white font-black rounded-2xl shadow-xl hover:scale-[1.01] transition-all active:scale-95 disabled:opacity-20`}
                 >
                   {pending ? (
@@ -317,75 +467,74 @@ const TraderWallet: React.FC<TraderWalletProps> = ({ user }) => {
         </div>
       </div>
 
-      {/* Transaction History Section */}
+      {/* Deposit History Section */}
       <div className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 p-8 md:p-10 rounded-[2.5rem] backdrop-blur-md shadow-sm">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h2 className="text-2xl font-black text-slate-900 dark:text-white">Capital Ledger</h2>
-            <p className="text-slate-500 dark:text-slate-400 text-sm">Full audit trail of deposits and authorized disbursements.</p>
+            <h2 className="text-2xl font-black text-slate-900 dark:text-white">Deposit History</h2>
+            <p className="text-slate-500 dark:text-slate-400 text-sm">Recent capital injections and gateway clearances.</p>
           </div>
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">
-              <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
-              <span>Cleared</span>
-            </div>
+          <div className="flex items-center space-x-1.5 text-[10px] font-black uppercase tracking-widest text-emerald-500">
+            <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
+            <span>Settled</span>
           </div>
         </div>
 
         <div className="space-y-4">
-          {history.length === 0 ? (
+          {depositHistory.length === 0 ? (
             <div className="py-20 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-3xl text-slate-400">
-              <p className="font-bold italic">No transactions recorded</p>
+              <p className="font-bold italic">No deposit records found</p>
             </div>
           ) : (
-            history.map(tx => (
-              <div key={tx.id} className="p-6 bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 rounded-3xl flex flex-col md:flex-row items-center justify-between group hover:border-slate-400 dark:hover:border-slate-700 transition-all gap-6">
-                <div className="flex items-center space-x-5 w-full md:w-auto">
-                   <div className={`w-12 h-12 rounded-xl flex items-center justify-center border ${
-                     tx.type === 'DEPOSIT' 
-                      ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' 
-                      : tx.status === 'REJECTED' 
-                        ? 'bg-rose-500/10 text-rose-600 border-rose-500/20'
-                        : 'bg-sky-500/10 text-sky-600 border-sky-500/20'
-                   }`}>
-                      {tx.type === 'DEPOSIT' ? (
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
-                      ) : (
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
-                      )}
-                   </div>
-                   <div>
-                     <div className="flex items-center space-x-2 mb-0.5">
-                       <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{tx.id}</span>
-                       <span className="text-slate-300 dark:text-slate-800 text-xs">|</span>
-                       <span className={`text-[9px] font-black uppercase tracking-tighter px-2 py-0.5 rounded-md border ${
-                         tx.status === 'APPROVED' || tx.status === 'COMPLETED' ? 'bg-emerald-500/5 text-emerald-500 border-emerald-500/10' : 'bg-rose-500/5 text-rose-500 border-rose-500/10'
-                       }`}>
-                         {tx.status}
-                       </span>
-                     </div>
-                     <div className="font-bold text-slate-800 dark:text-slate-200">{tx.type}</div>
-                     <div className="text-[10px] text-slate-500 font-mono mt-0.5">{tx.destinationDetails}</div>
-                   </div>
-                </div>
+            depositHistory.map(tx => <TransactionItem key={tx.id} tx={tx} />)
+          )}
+        </div>
+      </div>
 
-                <div className="flex items-center justify-between w-full md:w-auto md:space-x-12">
-                   <div className="text-left md:text-right">
-                      <div className="text-[10px] text-slate-400 uppercase font-black tracking-widest mb-1">Trace Date</div>
-                      <div className="text-xs font-bold text-slate-600 dark:text-slate-400 font-mono">
-                        {new Date(tx.timestamp).toLocaleDateString()}
-                      </div>
-                   </div>
-                   <div className="text-right">
-                      <div className="text-[10px] text-slate-400 uppercase font-black tracking-widest mb-1">Net Amount</div>
-                      <div className={`text-xl font-black font-mono tracking-tight ${tx.type === 'DEPOSIT' ? 'text-emerald-500' : 'text-slate-900 dark:text-white'}`}>
-                        {tx.type === 'DEPOSIT' ? '+' : '-'}${tx.amount.toLocaleString()}
-                        {tx.currency && tx.currency !== 'USD' && <span className="text-[10px] ml-1 opacity-50">{tx.currency}</span>}
-                      </div>
-                   </div>
-                </div>
-              </div>
-            ))
+      {/* Active Withdrawal Requests Section */}
+      <div className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 p-8 md:p-10 rounded-[2.5rem] backdrop-blur-md shadow-sm">
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h2 className="text-2xl font-black text-slate-900 dark:text-white">Active Withdrawals</h2>
+            <p className="text-slate-500 dark:text-slate-400 text-sm">Pending disbursement requests currently under review.</p>
+          </div>
+          <div className="flex items-center space-x-1.5 text-[10px] font-black uppercase tracking-widest text-amber-500">
+            <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></span>
+            <span>Pending</span>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          {activeWithdrawals.length === 0 ? (
+            <div className="py-20 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-3xl text-slate-400">
+              <p className="font-bold italic">No active requests</p>
+            </div>
+          ) : (
+            activeWithdrawals.map(tx => <TransactionItem key={tx.id} tx={tx} />)
+          )}
+        </div>
+      </div>
+
+      {/* Historical Disbursement Log Section */}
+      <div className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 p-8 md:p-10 rounded-[2.5rem] backdrop-blur-md shadow-sm">
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h2 className="text-2xl font-black text-slate-900 dark:text-white">Past Withdrawals</h2>
+            <p className="text-slate-500 dark:text-slate-400 text-sm">Historical record of all approved and rejected disbursement requests.</p>
+          </div>
+          <div className="flex items-center space-x-1.5 text-[10px] font-black uppercase tracking-widest text-sky-500">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/></svg>
+            <span>Audit Complete</span>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          {pastWithdrawals.length === 0 ? (
+            <div className="py-20 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-3xl text-slate-400">
+              <p className="font-bold italic">No finalized records found</p>
+            </div>
+          ) : (
+            pastWithdrawals.map(tx => <TransactionItem key={tx.id} tx={tx} />)
           )}
         </div>
       </div>

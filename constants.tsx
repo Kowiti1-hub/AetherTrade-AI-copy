@@ -25,11 +25,12 @@ export const COLORS = {
 };
 
 export const MOCK_ASSETS = [
-  { symbol: 'BTC', name: 'Bitcoin', price: 68432.12, change: 2.4, marketCap: '1.34T', volume24h: '35.2B' },
-  { symbol: 'ETH', name: 'Ethereum', price: 3452.88, change: -1.2, marketCap: '412.5B', volume24h: '18.1B' },
-  { symbol: 'SOL', name: 'Solana', price: 142.45, change: 5.8, marketCap: '63.2B', volume24h: '4.5B' },
-  { symbol: 'AAPL', name: 'Apple Inc.', price: 224.32, change: 0.45, marketCap: '3.42T', volume24h: '12.4B' },
-  { symbol: 'NVDA', name: 'NVIDIA', price: 124.12, change: 4.12, marketCap: '3.05T', volume24h: '42.1B' },
+  { symbol: 'EUR/USD', name: 'Euro / US Dollar', price: 1.0842, change: 0.12, marketCap: 'Majors', volume24h: '1.2T', spread: 0.0001, pipSize: 0.0001 },
+  { symbol: 'GBP/JPY', name: 'British Pound / Yen', price: 190.45, change: -0.45, marketCap: 'Minors', volume24h: '850B', spread: 0.02, pipSize: 0.01 },
+  { symbol: 'BTC/USD', name: 'Bitcoin', price: 68432.12, change: 2.4, marketCap: 'Crypto', volume24h: '35.2B', spread: 15.0, pipSize: 1.0 },
+  { symbol: 'XAU/USD', name: 'Gold / USD', price: 2142.88, change: 1.2, marketCap: 'Metals', volume24h: '18.1B', spread: 0.35, pipSize: 0.01 },
+  { symbol: 'USD/JPY', name: 'US Dollar / Yen', price: 151.32, change: 0.22, marketCap: 'Majors', volume24h: '940B', spread: 0.01, pipSize: 0.01 },
+  { symbol: 'SOL/USD', name: 'Solana', price: 142.45, change: 5.8, marketCap: 'Crypto', volume24h: '4.5B', spread: 0.12, pipSize: 0.01 },
 ];
 
 export const ICONS = {

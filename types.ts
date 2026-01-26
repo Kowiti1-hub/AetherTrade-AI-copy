@@ -6,6 +6,8 @@ export interface MarketAsset {
   change: number;
   marketCap: string;
   volume24h: string;
+  spread?: number;
+  pipSize?: number;
 }
 
 export interface TradingStrategy {
@@ -23,16 +25,15 @@ export enum UserRole {
 }
 
 export type UserStatus = 'ACTIVE' | 'SUSPENDED';
-
 export type PaymentMethodType = 'PAYPAL' | 'BANK' | 'MOBILE';
-
 export type Theme = 'light' | 'dark';
+export type TradeType = 'BINARY' | 'FOREX';
 
 export interface LinkedAccount {
   id: string;
   type: PaymentMethodType;
   label: string;
-  details: string; // Encrypted or masked string
+  details: string;
   provider?: string;
 }
 
@@ -47,6 +48,9 @@ export interface User {
   accountDetails?: string;
   balance?: number;
   demoBalance?: number;
+  margin?: number;
+  freeMargin?: number;
+  equity?: number;
   linkedAccounts?: LinkedAccount[];
 }
 
