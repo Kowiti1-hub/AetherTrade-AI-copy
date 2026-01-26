@@ -1,7 +1,9 @@
-
 import React, { useState } from 'react';
 import { gemini } from '../services/geminiService';
 import { TradingStrategy } from '../types';
+import { 
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area 
+} from 'recharts';
 
 interface BacktestResult {
   netProfit: number;
@@ -57,6 +59,19 @@ const StrategyBuilder: React.FC = () => {
       const profitPercentage = parseFloat((Math.random() * 15 * riskMultiplier * (daysDiff / 365) + 5).toFixed(2));
       const netProfitUSD = (capital * profitPercentage) / 100;
 
+      // Generate a more detailed equity curve
+      const steps = 30;
+      let currentEquity = capital;
+      const equityCurve = Array.from({ length: steps }, (_, i) => {
+        const volatility = (Math.random() - 0.45) * (capital * 0.05) * riskMultiplier;
+        currentEquity += volatility + (netProfitUSD / steps);
+        return { 
+          x: i, 
+          y: parseFloat(currentEquity.toFixed(2)),
+          label: `Step ${i}` 
+        };
+      });
+
       const result: BacktestResult = {
         netProfit: profitPercentage,
         netProfitUSD: netProfitUSD,
@@ -64,7 +79,7 @@ const StrategyBuilder: React.FC = () => {
         profitFactor: parseFloat((Math.random() * 0.8 + 1.2).toFixed(2)),
         maxDrawdown: parseFloat((Math.random() * 5 * riskMultiplier + 2).toFixed(2)),
         totalTrades: Math.floor((Math.random() * 100 + 40) * (daysDiff / 365)),
-        equityCurve: Array.from({ length: 20 }, (_, i) => ({ x: i, y: capital + (Math.random() * netProfitUSD) }))
+        equityCurve
       };
 
       setBacktestResult(result);
@@ -73,8 +88,8 @@ const StrategyBuilder: React.FC = () => {
   };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-12 transition-colors">
-      <div className="flex flex-col lg:flex-row gap-8">
+    <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-12 transition-colors">
+      <div className="flex flex-col xl:flex-row gap-8">
         {/* Left Column: Input and Architect */}
         <div className="flex-1 space-y-6">
           <div className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 p-8 rounded-3xl backdrop-blur-md shadow-xl transition-colors">
@@ -137,25 +152,124 @@ const StrategyBuilder: React.FC = () => {
             </button>
           </div>
 
-          {/* Performance Summary Grid */}
-          <div className="grid grid-cols-2 gap-4">
-             <div className="p-6 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl backdrop-blur-sm group hover:border-emerald-500/30 transition-colors shadow-sm dark:shadow-none">
-                <div className="text-slate-400 dark:text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1 group-hover:text-emerald-500 transition-colors">Efficiency Rating</div>
-                <div className="text-2xl font-bold font-mono text-slate-900 dark:text-white">94.2%</div>
-             </div>
-             <div className="p-6 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl backdrop-blur-sm group hover:border-sky-500/30 transition-colors shadow-sm dark:shadow-none">
-                <div className="text-slate-400 dark:text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1 group-hover:text-sky-500 transition-colors">Historical Congruence</div>
-                <div className="text-2xl font-bold font-mono text-slate-900 dark:text-white">78.1%</div>
-             </div>
-          </div>
+          {strategy && (isBacktesting || backtestResult) && (
+            <div className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-[2rem] p-8 shadow-2xl animate-in fade-in duration-500 transition-colors">
+              <div className="flex items-center justify-between mb-8">
+                <div>
+                  <h3 className="text-xl font-bold text-slate-900 dark:text-white">Strategy Backtest Performance</h3>
+                  <p className="text-sm text-slate-500">Historical equity projection based on architectural parameters.</p>
+                </div>
+                {isBacktesting && (
+                  <div className="flex items-center space-x-2">
+                    <div className="w-2 h-2 bg-emerald-500 rounded-full animate-ping"></div>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-emerald-500">Simulating...</span>
+                  </div>
+                )}
+              </div>
+
+              {isBacktesting ? (
+                <div className="h-[400px] flex flex-col items-center justify-center space-y-4">
+                  <div className="w-64 h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                    <div className="h-full bg-violet-500 animate-[loading_2s_ease-in-out_infinite] w-1/2"></div>
+                  </div>
+                  <p className="text-xs text-slate-500 font-mono italic">Ingesting historical ticks and volatility matrices...</p>
+                  <style>{`
+                    @keyframes loading {
+                      0% { transform: translateX(-100%); }
+                      100% { transform: translateX(200%); }
+                    }
+                  `}</style>
+                </div>
+              ) : backtestResult && (
+                <div className="space-y-10">
+                  {/* Stats Grid */}
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                    <div className="p-4 bg-slate-50 dark:bg-slate-950/40 rounded-2xl border border-slate-100 dark:border-slate-800/50">
+                      <div className="text-[10px] text-slate-400 font-bold mb-1 uppercase tracking-tighter">Net Profit</div>
+                      <div className="text-xl font-black text-emerald-600 font-mono">+${backtestResult.netProfitUSD.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                      <div className="text-[9px] text-emerald-500/70 font-bold">+{backtestResult.netProfit}%</div>
+                    </div>
+                    <div className="p-4 bg-slate-50 dark:bg-slate-950/40 rounded-2xl border border-slate-100 dark:border-slate-800/50">
+                      <div className="text-[10px] text-slate-400 font-bold mb-1 uppercase tracking-tighter">Win Rate</div>
+                      <div className="text-xl font-black text-sky-600 font-mono">{backtestResult.winRate}%</div>
+                      <div className="text-[9px] text-sky-500/70 font-bold">Weighted Alpha</div>
+                    </div>
+                    <div className="p-4 bg-slate-50 dark:bg-slate-950/40 rounded-2xl border border-slate-100 dark:border-slate-800/50">
+                      <div className="text-[10px] text-slate-400 font-bold mb-1 uppercase tracking-tighter">Profit Factor</div>
+                      <div className="text-xl font-black text-violet-600 font-mono">{backtestResult.profitFactor}</div>
+                      <div className="text-[9px] text-violet-500/70 font-bold">Sharpe Optimized</div>
+                    </div>
+                    <div className="p-4 bg-slate-50 dark:bg-slate-950/40 rounded-2xl border border-slate-100 dark:border-slate-800/50">
+                      <div className="text-[10px] text-slate-400 font-bold mb-1 uppercase tracking-tighter">Max Drawdown</div>
+                      <div className="text-xl font-black text-rose-600 font-mono">-{backtestResult.maxDrawdown}%</div>
+                      <div className="text-[9px] text-rose-500/70 font-bold">Historical Low</div>
+                    </div>
+                    <div className="p-4 bg-slate-50 dark:bg-slate-950/40 rounded-2xl border border-slate-100 dark:border-slate-800/50">
+                      <div className="text-[10px] text-slate-400 font-bold mb-1 uppercase tracking-tighter">Total Trades</div>
+                      <div className="text-xl font-black text-slate-700 dark:text-slate-300 font-mono">{backtestResult.totalTrades}</div>
+                      <div className="text-[9px] text-slate-500 font-bold">Execution Count</div>
+                    </div>
+                    <div className="p-4 bg-slate-50 dark:bg-slate-950/40 rounded-2xl border border-slate-100 dark:border-slate-800/50">
+                      <div className="text-[10px] text-slate-400 font-bold mb-1 uppercase tracking-tighter">Expectancy</div>
+                      <div className="text-xl font-black text-amber-600 font-mono">${(backtestResult.netProfitUSD / backtestResult.totalTrades).toFixed(2)}</div>
+                      <div className="text-[9px] text-amber-500/70 font-bold">Per Trade Edge</div>
+                    </div>
+                  </div>
+
+                  {/* Equity Curve Chart */}
+                  <div className="h-[400px] w-full bg-slate-50/50 dark:bg-slate-950/20 rounded-3xl p-6 border border-slate-100 dark:border-slate-800/50">
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Equity Growth Curve</h4>
+                      <div className="flex items-center space-x-4 text-[10px] text-slate-500">
+                        <span className="flex items-center"><div className="w-2 h-2 bg-emerald-500 rounded-full mr-1.5"></div> Project Equity</span>
+                      </div>
+                    </div>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={backtestResult.equityCurve}>
+                        <defs>
+                          <linearGradient id="equityGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.2}/>
+                            <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-slate-200 dark:text-slate-800" vertical={false} />
+                        <XAxis dataKey="x" hide />
+                        <YAxis 
+                          domain={['auto', 'auto']} 
+                          fontSize={10} 
+                          tickLine={false} 
+                          axisLine={false} 
+                          stroke="#64748b"
+                          tickFormatter={(val) => `$${val.toLocaleString()}`}
+                        />
+                        <Tooltip 
+                          contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '12px', fontSize: '12px' }}
+                          itemStyle={{ color: '#10b981' }}
+                          formatter={(value) => [`$${value.toLocaleString()}`, 'Equity']}
+                          labelStyle={{ display: 'none' }}
+                        />
+                        <Area 
+                          type="monotone" 
+                          dataKey="y" 
+                          stroke="#10b981" 
+                          strokeWidth={3} 
+                          fill="url(#equityGradient)" 
+                          animationDuration={1500}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* Right Column: Strategy Output and Backtest */}
-        <div className="w-full lg:w-[400px] flex flex-col space-y-6">
+        {/* Right Column: Strategy Output */}
+        <div className="w-full lg:w-[400px] flex flex-col space-y-6 shrink-0">
           {strategy ? (
             <div className="flex-1 flex flex-col space-y-6 animate-in zoom-in-95 duration-500">
-              {/* Strategy Details Card */}
-              <div className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-violet-500/20 rounded-[2rem] p-8 shadow-2xl relative overflow-hidden flex-1 transition-colors">
+              <div className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-violet-500/20 rounded-[2.5rem] p-8 shadow-2xl relative overflow-hidden flex-1 transition-colors">
                  <div className="absolute top-0 right-0 p-4 opacity-10 text-slate-400 dark:text-white">
                     <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1"><path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/><path d="M6 5h2"/><path d="M16 19h2"/></svg>
                  </div>
@@ -218,61 +332,9 @@ const StrategyBuilder: React.FC = () => {
                     </button>
                  </div>
               </div>
-
-              {/* Backtest Results Card */}
-              {(isBacktesting || backtestResult) && (
-                <div className="bg-white dark:bg-slate-900/60 border border-emerald-500/20 rounded-[2rem] p-8 shadow-2xl animate-in slide-in-from-top-4 duration-500 transition-colors">
-                  <div className="flex items-center justify-between mb-6">
-                    <h4 className="text-sm font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">Backtest Performance</h4>
-                    {isBacktesting && <div className="text-[10px] text-slate-400 dark:text-slate-500 animate-pulse">Processing Ticks...</div>}
-                  </div>
-
-                  {isBacktesting ? (
-                    <div className="space-y-6 py-4">
-                      <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                        <div className="bg-emerald-500 h-full animate-[loading_2.5s_ease-in-out_infinite] w-full"></div>
-                      </div>
-                      <style>{`
-                        @keyframes loading {
-                          0% { transform: translateX(-100%); }
-                          100% { transform: translateX(100%); }
-                        }
-                      `}</style>
-                      <div className="text-center text-xs text-slate-400 dark:text-slate-500 font-mono">Analyzing historical data matrix...</div>
-                    </div>
-                  ) : backtestResult && (
-                    <div className="space-y-5">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-slate-50 dark:bg-slate-950/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800/50 shadow-sm dark:shadow-none">
-                           <div className="text-[10px] text-slate-400 dark:text-slate-500 font-bold mb-1 uppercase tracking-tighter">Net Profit</div>
-                           <div className="text-lg font-black text-emerald-600 dark:text-emerald-400 font-mono">
-                              ${backtestResult.netProfitUSD.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                              <span className="text-[10px] ml-1 font-normal">(+{backtestResult.netProfit}%)</span>
-                           </div>
-                        </div>
-                        <div className="bg-slate-50 dark:bg-slate-950/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800/50 shadow-sm dark:shadow-none">
-                           <div className="text-[10px] text-slate-400 dark:text-slate-500 font-bold mb-1 uppercase tracking-tighter">Win Rate</div>
-                           <div className="text-lg font-black text-sky-600 dark:text-sky-400 font-mono">{backtestResult.winRate}%</div>
-                        </div>
-                        <div className="bg-slate-50 dark:bg-slate-950/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800/50 shadow-sm dark:shadow-none">
-                           <div className="text-[10px] text-slate-400 dark:text-slate-500 font-bold mb-1 uppercase tracking-tighter">Profit Factor</div>
-                           <div className="text-lg font-black text-slate-700 dark:text-slate-100 font-mono">{backtestResult.profitFactor}</div>
-                        </div>
-                        <div className="bg-slate-50 dark:bg-slate-950/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800/50 shadow-sm dark:shadow-none">
-                           <div className="text-[10px] text-slate-400 dark:text-slate-500 font-bold mb-1 uppercase tracking-tighter">Max Drawdown</div>
-                           <div className="text-lg font-black text-rose-600 dark:text-rose-500 font-mono">{backtestResult.maxDrawdown}%</div>
-                        </div>
-                      </div>
-                      <div className="text-[10px] text-slate-400 dark:text-slate-500 text-center font-bold bg-slate-50 dark:bg-slate-950/40 py-2 rounded-lg border border-slate-100 dark:border-slate-800/50 shadow-sm dark:shadow-none">
-                        Total Sample: {backtestResult.totalTrades} Simulated Trades ({startDate} to {endDate})
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           ) : (
-            <div className="flex-1 bg-slate-50 dark:bg-slate-900/20 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-[2rem] flex flex-col items-center justify-center p-10 text-center text-slate-400 dark:text-slate-600 transition-colors">
+            <div className="flex-1 bg-slate-50 dark:bg-slate-900/20 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-[2rem] flex flex-col items-center justify-center p-10 text-center text-slate-400 dark:text-slate-600 transition-colors h-full min-h-[500px]">
                <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800/50 rounded-2xl flex items-center justify-center mb-6 text-slate-300 dark:text-slate-700">
                   <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
                </div>
