@@ -28,6 +28,19 @@ export type UserStatus = 'ACTIVE' | 'SUSPENDED';
 export type PaymentMethodType = 'PAYPAL' | 'BANK' | 'MOBILE';
 export type Theme = 'light' | 'dark';
 export type TradeType = 'BINARY' | 'FOREX';
+export type OrderExecutionType = 'MARKET' | 'PENDING';
+export type PendingOrderType = 'BUY_LIMIT' | 'SELL_LIMIT' | 'BUY_STOP' | 'SELL_STOP';
+
+export interface PendingOrder {
+  id: string;
+  pair: string;
+  type: PendingOrderType;
+  triggerPrice: number;
+  size: number;
+  leverage: number;
+  sl?: number;
+  tp?: number;
+}
 
 export interface LinkedAccount {
   id: string;
@@ -52,6 +65,7 @@ export interface User {
   freeMargin?: number;
   equity?: number;
   linkedAccounts?: LinkedAccount[];
+  profilePicture?: string;
 }
 
 export interface WithdrawalRequest {
@@ -90,7 +104,8 @@ export enum AppView {
   USER_MANAGEMENT = 'USER_MANAGEMENT',
   WITHDRAWAL_REQUESTS = 'WITHDRAWAL_REQUESTS',
   TRADER_WALLET = 'TRADER_WALLET',
-  DEMO_TRADING = 'DEMO_TRADING'
+  DEMO_TRADING = 'DEMO_TRADING',
+  PROFILE = 'PROFILE'
 }
 
 export enum AuthView {

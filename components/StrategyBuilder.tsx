@@ -135,7 +135,8 @@ const StrategyBuilder: React.FC = () => {
 
   const clearDrawings = () => setDrawings([]);
 
-  const FibonacciLevels = ({ y1, y2, x1, x2 }: { y1: number, y2: number, x1: number, x2: number }) => {
+  // Fix: Added key to props type to satisfy TypeScript when rendering in a list
+  const FibonacciLevels = ({ y1, y2, x1, x2 }: { y1: number, y2: number, x1: number, x2: number, key?: React.Key }) => {
     const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
     const diff = y2 - y1;
     return (

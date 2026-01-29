@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { gemini } from '../services/geminiService';
 import { ICONS } from '../constants';
@@ -179,7 +180,8 @@ const MarketInsights: React.FC = () => {
     "Impact of federal reserve rates on tech stocks"
   ];
 
-  const FilterBadge = ({ label, active, onClick }: { label: string, active: boolean, onClick: () => void }) => (
+  // Fix: Added key to props type to satisfy TypeScript when rendering in a list
+  const FilterBadge = ({ label, active, onClick }: { label: string, active: boolean, onClick: () => void, key?: React.Key }) => (
     <button 
       onClick={onClick}
       className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border transition-all ${

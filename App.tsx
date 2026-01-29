@@ -13,6 +13,7 @@ import TraderWallet from './components/TraderWallet';
 import LandingPage from './components/LandingPage';
 import AuthPage from './components/AuthPage';
 import DemoTrading from './components/DemoTrading';
+import ProfilePage from './components/ProfilePage';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -97,7 +98,7 @@ const App: React.FC = () => {
           </span>
         </div>
 
-        <nav className="flex-1 space-y-2">
+        <nav className="flex-1 space-y-1">
           <NavItem view={AppView.DASHBOARD} icon={ICONS.Dashboard} label="Dashboard" />
           
           {user.role === UserRole.TRADER && (
@@ -117,6 +118,11 @@ const App: React.FC = () => {
                 icon={() => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>} 
                 label="My Wallet" 
               />
+              <NavItem 
+                view={AppView.PROFILE} 
+                icon={() => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>} 
+                label="Profile" 
+              />
             </>
           )}
 
@@ -131,11 +137,26 @@ const App: React.FC = () => {
         </nav>
 
         <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-2">
-          <div className={`p-3 bg-slate-100 dark:bg-slate-800/40 rounded-xl ${isSidebarOpen ? 'block' : 'hidden'}`}>
-             <div className="text-[10px] text-slate-500 mb-1 uppercase font-bold tracking-tighter">Authenticated as</div>
-             <div className="text-sm font-bold truncate text-slate-800 dark:text-slate-100">{user.username}</div>
-             <div className="text-[9px] px-2 py-0.5 mt-1 inline-block bg-sky-500/10 text-sky-600 dark:text-sky-400 rounded-full border border-sky-500/20">{user.role}</div>
-          </div>
+          <button 
+            onClick={() => setActiveView(AppView.PROFILE)}
+            className={`w-full group text-left p-3 rounded-xl transition-all ${activeView === AppView.PROFILE ? 'bg-slate-200 dark:bg-slate-800' : 'bg-slate-100 dark:bg-slate-800/40 hover:bg-slate-200 dark:hover:bg-slate-800'}`}
+          >
+             <div className="flex items-center space-x-3">
+               <div className="w-10 h-10 rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-700 flex-shrink-0">
+                 {user.profilePicture ? (
+                   <img src={user.profilePicture} alt="Profile" className="w-full h-full object-cover" />
+                 ) : (
+                   <div className="w-full h-full flex items-center justify-center text-slate-400">
+                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                   </div>
+                 )}
+               </div>
+               <div className={`${isSidebarOpen ? 'block' : 'hidden'} overflow-hidden`}>
+                 <div className="text-[10px] text-slate-500 uppercase font-bold tracking-tighter truncate">User Settings</div>
+                 <div className="text-sm font-bold truncate text-slate-800 dark:text-slate-100 group-hover:text-sky-500 transition-colors">{user.username}</div>
+               </div>
+             </div>
+          </button>
           <button onClick={() => setUser(null)} className="w-full flex items-center justify-center p-2 text-slate-500 hover:text-rose-500 transition-colors">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
             <span className={`ml-2 text-xs font-bold ${isSidebarOpen ? 'block' : 'hidden'}`}>Logout</span>
@@ -202,6 +223,7 @@ const App: React.FC = () => {
           {activeView === AppView.WITHDRAWAL_REQUESTS && <AdminWithdrawals />}
           {activeView === AppView.TRADER_WALLET && <TraderWallet user={user} />}
           {activeView === AppView.DEMO_TRADING && <DemoTrading user={user} />}
+          {activeView === AppView.PROFILE && <ProfilePage user={user} onUpdate={setUser} />}
         </div>
       </main>
     </div>
