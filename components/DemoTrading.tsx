@@ -166,7 +166,6 @@ const DemoTrading: React.FC<DemoTradingProps> = ({ user }) => {
             setPnl(isWinning ? position.size * selectedPair.payout : -position.size);
           } else {
             // Forex P&L: (Price Difference / PipSize) * LotSize * Leverage Scaling
-            // Longs close at Bid, Shorts close at Ask
             const closePrice = position.type === 'BUY' ? (newPrice - (selectedPair.spread/2)) : (newPrice + (selectedPair.spread/2));
             const diff = position.type === 'BUY' ? (closePrice - position.entry) : (position.entry - closePrice);
             const pipProfit = (diff / selectedPair.pipSize) * (position.size / 100);
@@ -202,7 +201,10 @@ const DemoTrading: React.FC<DemoTradingProps> = ({ user }) => {
   };
 
   const handleTradeAction = (type: 'BUY' | 'SELL') => {
-    if (position) return;
+    if (position) {
+      finalizeTrade(pnl, 'Manual Close');
+      return;
+    }
 
     const entry = type === 'BUY' ? askPrice : bidPrice;
     const marginNeeded = (amount * entry) / selectedLeverage;
@@ -494,8 +496,8 @@ const DemoTrading: React.FC<DemoTradingProps> = ({ user }) => {
                 </div>
               )}
 
-              {/* Execution State */}
-              {position ? (
+              {/* Real-time P/L Monitor (Visible only when position is active) */}
+              {position && (
                 <div className="p-6 bg-slate-50 dark:bg-slate-950 rounded-3xl border border-slate-200 dark:border-slate-800 animate-in zoom-in-95">
                   <div className="flex justify-between items-center mb-4">
                      <span className={`text-[10px] font-black px-3 py-1 rounded-full ${position.type === 'BUY' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>
@@ -506,32 +508,40 @@ const DemoTrading: React.FC<DemoTradingProps> = ({ user }) => {
                   <div className={`text-4xl font-mono font-black leading-none mb-2 ${pnl >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
                     {pnl >= 0 ? '+' : ''}${pnl.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </div>
-                  <div className="text-[9px] text-slate-500 uppercase font-bold tracking-tighter">Real-time P/L</div>
-                  <button 
-                    onClick={() => finalizeTrade(pnl, 'Manual Close')}
-                    className="w-full mt-6 py-3 bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-rose-500/20"
-                  >
-                    Close Position
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-3 pt-4">
-                  <button 
-                    onClick={() => handleTradeAction('BUY')}
-                    className="w-full py-6 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-2xl shadow-xl shadow-emerald-500/20 flex flex-col items-center justify-center group transition-all active:scale-95"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" className="mb-1 group-hover:-translate-y-1 transition-transform"><path d="m18 15-6-6-6 6"/></svg>
-                    <span className="text-sm uppercase tracking-[0.2em]">Buy @ {askPrice.toFixed(selectedPair.precision)}</span>
-                  </button>
-                  <button 
-                    onClick={() => handleTradeAction('SELL')}
-                    className="w-full py-6 bg-rose-500 hover:bg-rose-400 text-white font-black rounded-2xl shadow-xl shadow-rose-500/20 flex flex-col items-center justify-center group transition-all active:scale-95"
-                  >
-                    <span className="text-sm uppercase tracking-[0.2em]">Sell @ {bidPrice.toFixed(selectedPair.precision)}</span>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" className="mt-1 group-hover:translate-y-1 transition-transform"><path d="m6 9 6 6 6-6"/></svg>
-                  </button>
+                  <div className="text-[9px] text-slate-500 uppercase font-bold tracking-tighter">Running Profit/Loss</div>
                 </div>
               )}
+
+              {/* Buy & Sell Buttons: Opening or Closing */}
+              <div className="space-y-3 pt-4">
+                <button 
+                  onClick={() => handleTradeAction('BUY')}
+                  className={`w-full py-6 font-black rounded-2xl shadow-xl transition-all active:scale-95 flex flex-col items-center justify-center group ${
+                    position 
+                      ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-500/20' 
+                      : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/20'
+                  }`}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" className="mb-1 group-hover:-translate-y-1 transition-transform"><path d="m18 15-6-6-6 6"/></svg>
+                  <span className="text-sm uppercase tracking-[0.2em]">
+                    {position ? 'Close Position' : `Buy @ ${askPrice.toFixed(selectedPair.precision)}`}
+                  </span>
+                </button>
+                
+                <button 
+                  onClick={() => handleTradeAction('SELL')}
+                  className={`w-full py-6 font-black rounded-2xl shadow-xl transition-all active:scale-95 flex flex-col items-center justify-center group ${
+                    position 
+                      ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/20' 
+                      : 'bg-rose-500 hover:bg-rose-400 text-white shadow-rose-500/20'
+                  }`}
+                >
+                  <span className="text-sm uppercase tracking-[0.2em]">
+                    {position ? 'Close Position' : `Sell @ ${bidPrice.toFixed(selectedPair.precision)}`}
+                  </span>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" className="mt-1 group-hover:translate-y-1 transition-transform"><path d="m6 9 6 6 6-6"/></svg>
+                </button>
+              </div>
             </div>
           </div>
           
