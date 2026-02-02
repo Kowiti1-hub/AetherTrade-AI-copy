@@ -6,6 +6,13 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, ReferenceLine
 } from 'recharts';
 
+interface StrategyMarker {
+  x: number;
+  y: number;
+  type: 'ENTRY' | 'EXIT' | 'DRAWDOWN';
+  note: string;
+}
+
 interface BacktestResult {
   netProfit: number;
   netProfitUSD: number;
@@ -14,6 +21,7 @@ interface BacktestResult {
   maxDrawdown: number;
   totalTrades: number;
   equityCurve: { x: number, y: number, label: string }[];
+  markers: StrategyMarker[];
 }
 
 type ToolType = 'none' | 'trendline' | 'horizontal' | 'fibonacci';
@@ -73,11 +81,35 @@ const StrategyBuilder: React.FC = () => {
       const profitPercentage = parseFloat((Math.random() * 15 * riskMultiplier * (daysDiff / 365) + 5).toFixed(2));
       const netProfitUSD = (capital * profitPercentage) / 100;
 
-      const steps = 30;
+      const steps = 40;
       let currentEquity = capital;
+      const markers: StrategyMarker[] = [];
+      let lastPeak = capital;
+      
       const equityCurve = Array.from({ length: steps }, (_, i) => {
         const volatility = (Math.random() - 0.45) * (capital * 0.05) * riskMultiplier;
         currentEquity += volatility + (netProfitUSD / steps);
+        
+        // Marker Generation Logic
+        if (i > 0 && i < steps - 1) {
+          // Entry Marker
+          if (Math.random() > 0.85 && markers.filter(m => m.type === 'ENTRY').length < 5) {
+            markers.push({ x: i, y: currentEquity, type: 'ENTRY', note: 'Alpha Condition Met' });
+          }
+          // Exit Marker (typically follows an entry)
+          else if (Math.random() > 0.8 && markers.length > 0 && markers[markers.length-1].type === 'ENTRY') {
+             markers.push({ x: i, y: currentEquity, type: 'EXIT', note: 'Take Profit Triggered' });
+          }
+          // Significant Drawdown Marker
+          if (currentEquity < lastPeak * 0.95) {
+            if (!markers.some(m => m.type === 'DRAWDOWN' && Math.abs(m.x - i) < 5)) {
+              markers.push({ x: i, y: currentEquity, type: 'DRAWDOWN', note: 'Local Trough Detected' });
+            }
+          }
+        }
+        
+        if (currentEquity > lastPeak) lastPeak = currentEquity;
+
         return { 
           x: i, 
           y: parseFloat(currentEquity.toFixed(2)),
@@ -92,7 +124,8 @@ const StrategyBuilder: React.FC = () => {
         profitFactor: parseFloat((Math.random() * 0.8 + 1.2).toFixed(2)),
         maxDrawdown: parseFloat((Math.random() * 5 * riskMultiplier + 2).toFixed(2)),
         totalTrades: Math.floor((Math.random() * 100 + 40) * (daysDiff / 365)),
-        equityCurve
+        equityCurve,
+        markers
       };
 
       setBacktestResult(result);
@@ -135,7 +168,7 @@ const StrategyBuilder: React.FC = () => {
 
   const clearDrawings = () => setDrawings([]);
 
-  // Fix: Added key to props type to satisfy TypeScript when rendering in a list
+  // Fix: Added key prop to interface to resolve TS error when used in map or with key prop
   const FibonacciLevels = ({ y1, y2, x1, x2 }: { y1: number, y2: number, x1: number, x2: number, key?: React.Key }) => {
     const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
     const diff = y2 - y1;
@@ -161,6 +194,40 @@ const StrategyBuilder: React.FC = () => {
           );
         })}
         <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="rgba(14, 165, 233, 0.2)" strokeWidth="1" />
+      </g>
+    );
+  };
+
+  // Custom Dot component to render markers on the chart
+  const CustomChartDot = (props: any) => {
+    const { cx, cy, payload, markers } = props;
+    const marker = markers.find((m: StrategyMarker) => m.x === payload.x);
+    if (!marker) return null;
+
+    let color = '#10b981'; // Default Entry
+    let char = 'E';
+    let label = 'Entry';
+
+    if (marker.type === 'EXIT') {
+      color = '#f43f5e';
+      char = 'X';
+      label = 'Exit';
+    } else if (marker.type === 'DRAWDOWN') {
+      color = '#f59e0b';
+      char = '!';
+      label = 'Drawdown';
+    }
+
+    return (
+      <g className="cursor-help group">
+        <circle cx={cx} cy={cy} r="10" fill={color} stroke="#fff" strokeWidth="2" />
+        <text x={cx} y={cy + 4} textAnchor="middle" fill="#fff" fontSize="9" fontWeight="bold" pointerEvents="none">
+          {char}
+        </text>
+        <rect x={cx - 30} y={cy - 35} width="60" height="20" rx="4" fill="#0f172a" className="opacity-0 group-hover:opacity-100 transition-opacity" />
+        <text x={cx} y={cy - 22} textAnchor="middle" fill="#fff" fontSize="8" fontWeight="bold" className="opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+          {label}
+        </text>
       </g>
     );
   };
@@ -315,7 +382,8 @@ const StrategyBuilder: React.FC = () => {
                         className={`p-2.5 rounded-xl transition-all ${activeTool === 'fibonacci' ? 'bg-sky-500 text-white' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
                         title="Fibonacci Retracement"
                        >
-                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/><path d="M12 3v18"/></svg>
+                         {/* Fix: Removed duplicate x2 attribute */}
+                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="3" x2="21" y1="6" y2="6"/><line x1="3" x2="21" y1="12" y2="12"/><line x1="3" x2="21" y1="18" y2="18"/><path d="M12 3v18"/></svg>
                        </button>
                        <div className="pt-4 mt-4 border-t border-slate-200 dark:border-slate-800">
                           <button 
@@ -360,6 +428,7 @@ const StrategyBuilder: React.FC = () => {
                             strokeWidth={3} 
                             fill="url(#equityGradient)" 
                             animationDuration={1500}
+                            dot={<CustomChartDot markers={backtestResult.markers} />}
                           />
                         </AreaChart>
                       </ResponsiveContainer>
@@ -395,6 +464,7 @@ const StrategyBuilder: React.FC = () => {
                                 />
                               );
                             case 'fibonacci':
+                              { /* Fix: Added key prop to FibonacciLevels call */ }
                               return <FibonacciLevels key={drawing.id} x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} />;
                             default:
                               return null;
@@ -414,6 +484,7 @@ const StrategyBuilder: React.FC = () => {
                                 case 'horizontal':
                                   return <line key={drawing.id} x1="0" y1={p1.y} x2="100%" y2={p1.y} stroke="#f59e0b" strokeWidth="2" strokeDasharray="5 5" strokeOpacity="0.6" />;
                                 case 'fibonacci':
+                                  { /* Fix: Added key prop to FibonacciLevels call */ }
                                   return <FibonacciLevels key={drawing.id} x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} />;
                                 default: return null;
                               }

@@ -16,13 +16,18 @@ interface TradingPair {
   payout: number;
   spread: number;
   pipSize: number;
+  category: 'Forex' | 'Crypto' | 'Commodities' | 'Stocks';
 }
 
 const TRADING_PAIRS: TradingPair[] = [
-  { symbol: 'EUR/USD', displayName: 'Euro / US Dollar', basePrice: 1.0842, volatility: 0.0005, precision: 5, payout: 0.92, spread: 0.00015, pipSize: 0.0001 },
-  { symbol: 'GBP/JPY', displayName: 'British Pound / Yen', basePrice: 190.45, volatility: 0.05, precision: 2, payout: 0.85, spread: 0.03, pipSize: 0.01 },
-  { symbol: 'XAU/USD', displayName: 'Gold / US Dollar', basePrice: 2142.50, volatility: 1.5, precision: 2, payout: 0.78, spread: 0.45, pipSize: 0.01 },
-  { symbol: 'BTC/USD', displayName: 'Bitcoin / USD', basePrice: 68400, volatility: 45, precision: 2, payout: 0.82, spread: 15.0, pipSize: 1.0 },
+  { symbol: 'EUR/USD', displayName: 'Euro / US Dollar', basePrice: 1.0842, volatility: 0.0005, precision: 5, payout: 0.92, spread: 0.00015, pipSize: 0.0001, category: 'Forex' },
+  { symbol: 'GBP/JPY', displayName: 'British Pound / Yen', basePrice: 190.45, volatility: 0.05, precision: 2, payout: 0.85, spread: 0.03, pipSize: 0.01, category: 'Forex' },
+  { symbol: 'USD/JPY', displayName: 'US Dollar / Yen', basePrice: 151.22, volatility: 0.02, precision: 3, payout: 0.88, spread: 0.015, pipSize: 0.01, category: 'Forex' },
+  { symbol: 'XAU/USD', displayName: 'Gold / US Dollar', basePrice: 2142.50, volatility: 1.5, precision: 2, payout: 0.78, spread: 0.45, pipSize: 0.01, category: 'Commodities' },
+  { symbol: 'BTC/USD', displayName: 'Bitcoin / USD', basePrice: 68400, volatility: 45, precision: 2, payout: 0.82, spread: 15.0, pipSize: 1.0, category: 'Crypto' },
+  { symbol: 'ETH/USD', displayName: 'Ethereum / USD', basePrice: 3820, volatility: 8.5, precision: 2, payout: 0.84, spread: 1.2, pipSize: 1.0, category: 'Crypto' },
+  { symbol: 'AAPL/USD', displayName: 'Apple Inc.', basePrice: 172.62, volatility: 0.45, precision: 2, payout: 0.75, spread: 0.08, pipSize: 0.01, category: 'Stocks' },
+  { symbol: 'TSLA/USD', displayName: 'Tesla Inc.', basePrice: 175.22, volatility: 1.2, precision: 2, payout: 0.72, spread: 0.15, pipSize: 0.01, category: 'Stocks' },
 ];
 
 const LEVERAGE_OPTIONS = [10, 50, 100, 200, 500];
@@ -46,6 +51,8 @@ const DemoTrading: React.FC<DemoTradingProps> = ({ user }) => {
   const [selectedPair, setSelectedPair] = useState<TradingPair>(TRADING_PAIRS[0]);
   const [demoPrice, setDemoPrice] = useState(TRADING_PAIRS[0].basePrice);
   const [history, setHistory] = useState<{ time: string, price: number }[]>([]);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   
   // Account Matrix
   const [totalDemoProfit, setTotalDemoProfit] = useState(0);
@@ -80,6 +87,7 @@ const DemoTrading: React.FC<DemoTradingProps> = ({ user }) => {
 
   const timerRef = useRef<number | null>(null);
   const countdownRef = useRef<number | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const addNotification = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
     const id = Math.random().toString(36).substr(2, 9);
@@ -101,7 +109,19 @@ const DemoTrading: React.FC<DemoTradingProps> = ({ user }) => {
     }));
     setHistory(initial);
     setDemoPrice(selectedPair.basePrice);
+    setSearchQuery('');
   }, [selectedPair]);
+
+  // Click outside listener for dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [dropdownRef]);
 
   // Handle auto-liquidation, SL/TP, and Pending Triggers
   useEffect(() => {
@@ -249,6 +269,11 @@ const DemoTrading: React.FC<DemoTradingProps> = ({ user }) => {
     addNotification('Pending order cancelled', 'info');
   };
 
+  const filteredPairs = TRADING_PAIRS.filter(p => 
+    p.symbol.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    p.displayName.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   const marginUsed = position ? (position.size * position.entry) / position.leverage : 0;
   const currentEquity = equity + pnl;
   const marginLevel = marginUsed > 0 ? (currentEquity / marginUsed) * 100 : 0;
@@ -282,24 +307,80 @@ const DemoTrading: React.FC<DemoTradingProps> = ({ user }) => {
         ))}
       </div>
 
-      {/* Main Controls Section */}
-      <div className="flex flex-col lg:flex-row gap-6">
-        <div className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2rem] p-4 flex items-center justify-between shadow-sm overflow-x-auto">
-          <div className="flex items-center space-x-2">
-            {TRADING_PAIRS.map(pair => (
-              <button 
-                key={pair.symbol}
-                onClick={() => setSelectedPair(pair)}
-                disabled={!!position}
-                className={`px-5 py-3 rounded-2xl flex flex-col items-start transition-all border ${selectedPair.symbol === pair.symbol ? 'bg-sky-500/10 border-sky-500/50 text-sky-600 dark:text-sky-400' : 'border-transparent text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'} disabled:opacity-50`}
-              >
-                <span className="text-[10px] font-black uppercase tracking-widest">{pair.symbol}</span>
-                <span className="text-xs font-bold font-mono">
-                  {tradeType === 'BINARY' ? `${(pair.payout * 100).toFixed(0)}%` : `Spread: ${(pair.spread / pair.pipSize).toFixed(1)} Pips`}
-                </span>
-              </button>
-            ))}
-          </div>
+      {/* Main Controls Section with Asset Selector Dropdown */}
+      <div className="flex flex-col lg:flex-row gap-6 relative z-50">
+        <div className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2rem] p-4 flex items-center shadow-sm relative" ref={dropdownRef}>
+           <button 
+            onClick={() => !position && setIsDropdownOpen(!isDropdownOpen)}
+            disabled={!!position}
+            className={`flex items-center space-x-4 px-6 py-3 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-sky-500/50 transition-all w-full lg:w-auto ${position ? 'opacity-50' : ''}`}
+           >
+             <div className="w-10 h-10 bg-sky-500/10 rounded-xl flex items-center justify-center font-black text-sky-500 uppercase">{selectedPair.symbol[0]}</div>
+             <div className="text-left">
+               <div className="text-xs font-black uppercase tracking-widest text-slate-400">Trading Asset</div>
+               <div className="text-sm font-bold text-slate-900 dark:text-white flex items-center">
+                 {selectedPair.symbol} 
+                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`ml-2 transition-transform duration-300 ${isDropdownOpen ? 'rotate-180' : ''}`}><path d="m6 9 6 6 6-6"/></svg>
+               </div>
+             </div>
+           </button>
+
+           {/* The Asset Selector Dropdown */}
+           {isDropdownOpen && (
+             <div className="absolute top-full left-0 mt-2 w-full lg:w-[450px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl p-4 animate-in slide-in-from-top-2 z-[100] backdrop-blur-xl">
+               <div className="relative mb-4">
+                 <input 
+                  type="text" 
+                  autoFocus
+                  placeholder="Search assets..." 
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm focus:border-sky-500 outline-none"
+                 />
+                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+               </div>
+               
+               <div className="max-h-[350px] overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+                 {filteredPairs.map(pair => (
+                   <button 
+                    key={pair.symbol}
+                    onClick={() => { setSelectedPair(pair); setIsDropdownOpen(false); }}
+                    className={`w-full flex items-center justify-between p-3 rounded-xl transition-all ${selectedPair.symbol === pair.symbol ? 'bg-sky-500 text-white' : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400'}`}
+                   >
+                     <div className="flex items-center space-x-3">
+                       <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-[10px] ${selectedPair.symbol === pair.symbol ? 'bg-white/20 text-white' : 'bg-sky-500/10 text-sky-500'}`}>{pair.symbol[0]}</div>
+                       <div className="text-left">
+                         <div className={`text-xs font-bold ${selectedPair.symbol === pair.symbol ? 'text-white' : 'text-slate-900 dark:text-slate-100'}`}>{pair.symbol}</div>
+                         <div className={`text-[10px] ${selectedPair.symbol === pair.symbol ? 'text-white/70' : 'text-slate-500'}`}>{pair.displayName}</div>
+                       </div>
+                     </div>
+                     <div className="text-right">
+                       <div className={`text-xs font-mono font-bold ${selectedPair.symbol === pair.symbol ? 'text-white' : 'text-slate-900 dark:text-slate-100'}`}>${pair.basePrice.toLocaleString()}</div>
+                       <div className={`text-[9px] font-black uppercase ${selectedPair.symbol === pair.symbol ? 'text-white/70' : 'text-sky-500'}`}>{pair.category}</div>
+                     </div>
+                   </button>
+                 ))}
+                 {filteredPairs.length === 0 && (
+                   <div className="p-10 text-center text-slate-500 italic text-sm">No assets found matching "{searchQuery}"</div>
+                 )}
+               </div>
+             </div>
+           )}
+
+           <div className="hidden lg:flex items-center space-x-6 ml-8 pl-8 border-l border-slate-100 dark:border-slate-800">
+             <div className="text-center">
+               <div className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">Spread</div>
+               <div className="text-xs font-mono font-bold text-sky-500">{(selectedPair.spread / selectedPair.pipSize).toFixed(1)} Pips</div>
+             </div>
+             <div className="text-center">
+               <div className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">Leverage</div>
+               <div className="text-xs font-mono font-bold text-slate-900 dark:text-white">Up to 1:{LEVERAGE_OPTIONS[LEVERAGE_OPTIONS.length-1]}</div>
+             </div>
+             <div className="text-center">
+               <div className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">Fixed Payout</div>
+               <div className="text-xs font-mono font-bold text-amber-500">{(selectedPair.payout * 100).toFixed(0)}%</div>
+             </div>
+           </div>
         </div>
 
         {/* Trade Type Switcher */}
@@ -319,7 +400,7 @@ const DemoTrading: React.FC<DemoTradingProps> = ({ user }) => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 relative z-10">
         
         {/* Real-time Chart */}
         <div className="lg:col-span-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] p-8 shadow-sm relative overflow-hidden">
@@ -431,7 +512,7 @@ const DemoTrading: React.FC<DemoTradingProps> = ({ user }) => {
                         key={opt.value}
                         onClick={() => setSelectedExpiration(opt.value)}
                         disabled={!!position}
-                        className={`py-2.5 rounded-xl text-xs font-black transition-all border ${selectedExpiration === opt.value ? 'bg-amber-500 border-amber-500 text-slate-950' : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-500'}`}
+                        className={`py-2.5 rounded-xl text-xs font-black transition-all border ${selectedExpiration === opt.value ? 'bg-amber-500 border-amber-500 text-slate-950' : 'bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-500'}`}
                       >
                         {opt.label}
                       </button>
@@ -447,7 +528,7 @@ const DemoTrading: React.FC<DemoTradingProps> = ({ user }) => {
                         key={opt}
                         onClick={() => setSelectedLeverage(opt)}
                         disabled={!!position}
-                        className={`py-2.5 rounded-xl text-xs font-black transition-all border ${selectedLeverage === opt ? 'bg-sky-500 border-sky-500 text-white' : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-500'}`}
+                        className={`py-2.5 rounded-xl text-xs font-black transition-all border ${selectedLeverage === opt ? 'bg-sky-500 border-sky-500 text-white' : 'bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-500'}`}
                       >
                         1:{opt}
                       </button>
@@ -549,7 +630,7 @@ const DemoTrading: React.FC<DemoTradingProps> = ({ user }) => {
           {pendingOrders.length > 0 && (
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] p-6 shadow-sm overflow-hidden">
               <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Pending Stack ({pendingOrders.length})</h4>
-              <div className="space-y-3 max-h-[200px] overflow-y-auto pr-2">
+              <div className="space-y-3 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
                 {pendingOrders.map(p => (
                   <div key={p.id} className="p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl group relative">
                     <div className="flex justify-between items-center mb-1">

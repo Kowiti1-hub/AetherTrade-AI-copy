@@ -53,6 +53,9 @@ export interface LinkedAccount {
 export interface User {
   id: string;
   username: string;
+  firstName: string;
+  middleName?: string;
+  lastName: string;
   email: string;
   role: UserRole;
   status: UserStatus;
@@ -66,6 +69,7 @@ export interface User {
   equity?: number;
   linkedAccounts?: LinkedAccount[];
   profilePicture?: string;
+  emailVerified?: boolean;
 }
 
 export interface WithdrawalRequest {

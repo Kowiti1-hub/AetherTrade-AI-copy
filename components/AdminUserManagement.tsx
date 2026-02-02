@@ -2,16 +2,18 @@
 import React, { useState } from 'react';
 import { User, UserRole, UserStatus } from '../types';
 
+// Fixed: Added missing firstName and lastName properties to initial users
 const INITIAL_USERS: User[] = [
-  { id: '1', username: 'Trader_Alpha', email: 'alpha@test.com', role: UserRole.TRADER, status: 'ACTIVE', phone: '+44 7700 900001', country: 'UK' },
-  { id: '2', username: 'Whale_Watcher', email: 'whale@test.com', role: UserRole.TRADER, status: 'ACTIVE', phone: '+1 555 1234567', country: 'USA' },
-  { id: '3', username: 'Market_Ghost', email: 'ghost@test.com', role: UserRole.TRADER, status: 'SUSPENDED', phone: '+81 90 1234 5678', country: 'JP' },
+  { id: '1', username: 'Trader_Alpha', firstName: 'Alpha', lastName: 'Trader', email: 'alpha@test.com', role: UserRole.TRADER, status: 'ACTIVE', phone: '+44 7700 900001', country: 'UK' },
+  { id: '2', username: 'Whale_Watcher', firstName: 'Whale', lastName: 'Watcher', email: 'whale@test.com', role: UserRole.TRADER, status: 'ACTIVE', phone: '+1 555 1234567', country: 'USA' },
+  { id: '3', username: 'Market_Ghost', firstName: 'Market', lastName: 'Ghost', email: 'ghost@test.com', role: UserRole.TRADER, status: 'SUSPENDED', phone: '+81 90 1234 5678', country: 'JP' },
 ];
 
 const AdminUserManagement: React.FC = () => {
   const [users, setUsers] = useState<User[]>(INITIAL_USERS);
   const [isAdding, setIsAdding] = useState(false);
-  const [newUser, setNewUser] = useState({ username: '', email: '', phone: '', country: '' });
+  // Fixed: Updated state to include firstName and lastName
+  const [newUser, setNewUser] = useState({ username: '', firstName: '', lastName: '', email: '', phone: '', country: '' });
 
   const toggleStatus = (id: string) => {
     setUsers(prev => prev.map(u => 
@@ -27,9 +29,12 @@ const AdminUserManagement: React.FC = () => {
 
   const handleAddUser = (e: React.FormEvent) => {
     e.preventDefault();
+    // Fixed: Properly structured User object with firstName and lastName
     const user: User = {
       id: Date.now().toString(),
       username: newUser.username,
+      firstName: newUser.firstName,
+      lastName: newUser.lastName,
       email: newUser.email,
       phone: newUser.phone,
       country: newUser.country,
@@ -38,7 +43,7 @@ const AdminUserManagement: React.FC = () => {
     };
     setUsers([user, ...users]);
     setIsAdding(false);
-    setNewUser({ username: '', email: '', phone: '', country: '' });
+    setNewUser({ username: '', firstName: '', lastName: '', email: '', phone: '', country: '' });
   };
 
   return (
@@ -60,6 +65,9 @@ const AdminUserManagement: React.FC = () => {
         <div className="p-6 bg-slate-900 border border-slate-800 rounded-3xl animate-in zoom-in-95">
           <h3 className="text-sm font-black uppercase text-slate-500 mb-4">Manual User Provisioning</h3>
           <form onSubmit={handleAddUser} className="grid grid-cols-2 gap-4">
+            {/* Added: firstName and lastName input fields to the form */}
+            <input type="text" placeholder="First Name" required value={newUser.firstName} onChange={e => setNewUser({...newUser, firstName: e.target.value})} className="bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm" />
+            <input type="text" placeholder="Last Name" required value={newUser.lastName} onChange={e => setNewUser({...newUser, lastName: e.target.value})} className="bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm" />
             <input type="text" placeholder="Username" required value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} className="bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm" />
             <input type="email" placeholder="Email" required value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} className="bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm" />
             <input type="text" placeholder="Phone" value={newUser.phone} onChange={e => setNewUser({...newUser, phone: e.target.value})} className="bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm" />
