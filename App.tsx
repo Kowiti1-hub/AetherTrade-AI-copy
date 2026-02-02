@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { AppView, AuthView, User, UserRole, Theme } from './types';
+import { AppView, AuthView, User, UserRole, Theme, Transaction } from './types';
 import { ICONS } from './constants';
 import Dashboard from './components/Dashboard';
 import MarketInsights from './components/MarketInsights';
@@ -14,6 +14,7 @@ import LandingPage from './components/LandingPage';
 import AuthPage from './components/AuthPage';
 import DemoTrading from './components/DemoTrading';
 import ProfilePage from './components/ProfilePage';
+import TransactionHistory from './components/TransactionHistory';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -21,6 +22,7 @@ const App: React.FC = () => {
   const [activeView, setActiveView] = useState<AppView>(AppView.DASHBOARD);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isDemoMode, setIsDemoMode] = useState(true);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [theme, setTheme] = useState<Theme>(() => {
     const saved = localStorage.getItem('theme') as Theme;
     return saved || 'dark';
@@ -37,14 +39,13 @@ const App: React.FC = () => {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
-  useEffect(() => {
-    if (!user && authView === AuthView.LANDING) {
-      document.body.style.overflow = 'auto';
-    } else {
-      document.body.style.overflow = 'hidden';
-      window.scrollTo(0, 0);
-    }
-  }, [user, authView]);
+  const handleUpdateUser = (updatedUser: User) => {
+    setUser(updatedUser);
+  };
+
+  const handleAddTransaction = (tx: Transaction) => {
+    setTransactions(prev => [tx, ...prev]);
+  };
 
   if (!user) {
     if (authView === AuthView.LANDING) {
@@ -110,13 +111,18 @@ const App: React.FC = () => {
               <NavItem 
                 view={AppView.DEMO_TRADING} 
                 icon={() => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>} 
-                label="Binary Options" 
+                label="Trade Floor" 
                 color="amber"
               />
               <NavItem 
                 view={AppView.TRADER_WALLET} 
                 icon={() => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>} 
                 label="My Wallet" 
+              />
+              <NavItem 
+                view={AppView.TRANSACTION_HISTORY} 
+                icon={() => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>} 
+                label="History" 
               />
               <NavItem 
                 view={AppView.PROFILE} 
@@ -131,6 +137,7 @@ const App: React.FC = () => {
               <div className="pt-4 pb-2 px-4 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em]">Administration</div>
               <NavItem view={AppView.USER_MANAGEMENT} icon={() => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>} label="User Manager" />
               <NavItem view={AppView.WITHDRAWAL_REQUESTS} icon={() => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20"/><path d="m17 5-5-3-5 3"/><path d="m17 19-5 3-5-3"/><path d="M2 12h20"/></svg>} label="Withdrawals" />
+              <NavItem view={AppView.TRANSACTION_HISTORY} icon={() => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>} label="Global Logs" />
               <NavItem view={AppView.SECURITY_HUB} icon={ICONS.Security} label="MTD Security" />
             </>
           )}
@@ -175,7 +182,6 @@ const App: React.FC = () => {
               </span>
             </div>
 
-            {/* Cabinet Style Balance Switcher */}
             <div className="hidden md:flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
                <button 
                 onClick={() => setIsDemoMode(false)}
@@ -220,10 +226,11 @@ const App: React.FC = () => {
           {activeView === AppView.LIVE_ASSISTANT && <LiveAssistant />}
           {activeView === AppView.SECURITY_HUB && <SecurityHub />}
           {activeView === AppView.USER_MANAGEMENT && <AdminUserManagement />}
-          {activeView === AppView.WITHDRAWAL_REQUESTS && <AdminWithdrawals />}
-          {activeView === AppView.TRADER_WALLET && <TraderWallet user={user} />}
-          {activeView === AppView.DEMO_TRADING && <DemoTrading user={user} />}
+          {activeView === AppView.WITHDRAWAL_REQUESTS && <AdminWithdrawals transactions={transactions} onUpdateTransactions={setTransactions} onUpdateUser={handleUpdateUser} />}
+          {activeView === AppView.TRADER_WALLET && <TraderWallet user={user} onUpdateUser={handleUpdateUser} onAddTransaction={handleAddTransaction} />}
+          {activeView === AppView.DEMO_TRADING && <DemoTrading user={user} isDemoMode={isDemoMode} onUpdateUser={handleUpdateUser} onAddTransaction={handleAddTransaction} />}
           {activeView === AppView.PROFILE && <ProfilePage user={user} onUpdate={setUser} />}
+          {activeView === AppView.TRANSACTION_HISTORY && <TransactionHistory user={user} transactions={transactions} />}
         </div>
       </main>
     </div>

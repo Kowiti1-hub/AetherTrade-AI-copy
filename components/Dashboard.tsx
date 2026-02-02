@@ -23,6 +23,13 @@ const intelligenceFeed = [
   { id: 5, source: 'Wall Street Journal', title: 'Global shipping rates spike as regional tensions impact trade routes.', time: '1h ago', sentiment: 'Bearish', urgency: 'High' },
 ];
 
+const portfolioAllocation = [
+  { name: 'Crypto', value: 64134, color: '#0ea5e9' },
+  { name: 'Stocks', value: 42756, color: '#8b5cf6' },
+  { name: 'Forex', value: 21378, color: '#10b981' },
+  { name: 'Commodities', value: 14252, color: '#f59e0b' },
+];
+
 const Dashboard: React.FC = () => {
   const [assets, setAssets] = useState<MarketAsset[]>(MOCK_ASSETS);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
@@ -164,6 +171,80 @@ const Dashboard: React.FC = () => {
           <button className="mt-6 w-full py-3 bg-slate-100 dark:bg-slate-800 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-sky-500 transition-colors">
             Full Institutional Calendar
           </button>
+        </div>
+      </div>
+
+      {/* Portfolio Allocation Section */}
+      <div className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] p-8 shadow-sm">
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h3 className="text-xl font-bold text-slate-900 dark:text-white">Portfolio Asset Allocation</h3>
+            <p className="text-sm text-slate-500 mt-1">Institutional breakdown of your capital deployment across asset classes.</p>
+          </div>
+          <div className="px-4 py-2 bg-slate-100 dark:bg-slate-800 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500">
+            Updated: {lastUpdate.toLocaleTimeString()}
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+          <div className="h-[350px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={portfolioAllocation}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={80}
+                  outerRadius={120}
+                  paddingAngle={5}
+                  dataKey="value"
+                  animationBegin={200}
+                  animationDuration={1500}
+                >
+                  {portfolioAllocation.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} stroke="none" fillOpacity={0.8} />
+                  ))}
+                </Pie>
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: '#0f172a', 
+                    border: 'none', 
+                    borderRadius: '16px', 
+                    padding: '12px',
+                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'
+                  }}
+                  itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 'bold' }}
+                  formatter={(value: number) => [`$${value.toLocaleString()}`, 'Value']}
+                />
+                <Legend 
+                  verticalAlign="middle" 
+                  align="right" 
+                  layout="vertical"
+                  iconType="circle"
+                  formatter={(value) => <span className="text-sm font-semibold text-slate-600 dark:text-slate-400 ml-2">{value}</span>}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            {portfolioAllocation.map((item) => {
+              const percentage = ((item.value / 142520) * 100).toFixed(1);
+              return (
+                <div key={item.name} className="p-6 bg-slate-50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-800/50 rounded-2xl group hover:border-sky-500/30 transition-all">
+                  <div className="flex items-center space-x-3 mb-3">
+                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }}></div>
+                    <span className="text-xs font-black uppercase tracking-widest text-slate-500">{item.name}</span>
+                  </div>
+                  <div className="text-2xl font-bold text-slate-900 dark:text-white mb-1">${item.value.toLocaleString()}</div>
+                  <div className="flex items-center justify-between text-[10px] font-bold">
+                    <span className="text-sky-500">{percentage}% Allocation</span>
+                    <span className="text-slate-400 uppercase tracking-tighter">Live Status</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 

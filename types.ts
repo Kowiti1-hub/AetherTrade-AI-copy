@@ -30,6 +30,19 @@ export type Theme = 'light' | 'dark';
 export type TradeType = 'BINARY' | 'FOREX';
 export type OrderExecutionType = 'MARKET' | 'PENDING';
 export type PendingOrderType = 'BUY_LIMIT' | 'SELL_LIMIT' | 'BUY_STOP' | 'SELL_STOP';
+export type TransactionType = 'DEPOSIT' | 'WITHDRAWAL' | 'TRADE_OPEN' | 'TRADE_CLOSE';
+
+export interface Transaction {
+  id: string;
+  userId: string;
+  username: string;
+  amount: number;
+  type: TransactionType;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'COMPLETED';
+  timestamp: number;
+  methodType?: PaymentMethodType;
+  details: string;
+}
 
 export interface PendingOrder {
   id: string;
@@ -57,6 +70,7 @@ export interface User {
   middleName?: string;
   lastName: string;
   email: string;
+  password?: string; // For simulation of password change
   role: UserRole;
   status: UserStatus;
   phone?: string;
@@ -68,6 +82,7 @@ export interface User {
   freeMargin?: number;
   equity?: number;
   linkedAccounts?: LinkedAccount[];
+  paybillNumber?: string; // Unique Paybill for direct deposit tracking
   profilePicture?: string;
   emailVerified?: boolean;
 }
@@ -109,7 +124,8 @@ export enum AppView {
   WITHDRAWAL_REQUESTS = 'WITHDRAWAL_REQUESTS',
   TRADER_WALLET = 'TRADER_WALLET',
   DEMO_TRADING = 'DEMO_TRADING',
-  PROFILE = 'PROFILE'
+  PROFILE = 'PROFILE',
+  TRANSACTION_HISTORY = 'TRANSACTION_HISTORY'
 }
 
 export enum AuthView {

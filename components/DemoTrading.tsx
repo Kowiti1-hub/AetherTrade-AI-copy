@@ -1,10 +1,13 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { User, TradeType, OrderExecutionType, PendingOrderType, PendingOrder } from '../types';
+import { User, TradeType, OrderExecutionType, PendingOrderType, PendingOrder, Transaction } from '../types';
 
 interface DemoTradingProps {
   user: User;
+  isDemoMode: boolean;
+  onUpdateUser: (user: User) => void;
+  onAddTransaction: (tx: Transaction) => void;
 }
 
 interface TradingPair {
@@ -45,7 +48,7 @@ interface Notification {
   type: 'success' | 'error' | 'info';
 }
 
-const DemoTrading: React.FC<DemoTradingProps> = ({ user }) => {
+const DemoTrading: React.FC<DemoTradingProps> = ({ user, isDemoMode, onUpdateUser, onAddTransaction }) => {
   const [tradeType, setTradeType] = useState<TradeType>('FOREX');
   const [execType, setExecType] = useState<OrderExecutionType>('MARKET');
   const [selectedPair, setSelectedPair] = useState<TradingPair>(TRADING_PAIRS[0]);
@@ -54,11 +57,10 @@ const DemoTrading: React.FC<DemoTradingProps> = ({ user }) => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   
-  // Account Matrix
   const [totalDemoProfit, setTotalDemoProfit] = useState(0);
-  const equity = (user.demoBalance || 50000) + totalDemoProfit;
+  const currentBalance = isDemoMode ? (user.demoBalance || 50000) + totalDemoProfit : (user.balance || 0);
+  const equity = currentBalance;
   
-  // Orders State
   const [position, setPosition] = useState<{ 
     entry: number, 
     size: number, 
@@ -79,7 +81,6 @@ const DemoTrading: React.FC<DemoTradingProps> = ({ user }) => {
   const [selectedExpiration, setSelectedExpiration] = useState(15);
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   
-  // SL / TP / Pending Prices
   const [slPrice, setSlPrice] = useState<string>('');
   const [tpPrice, setTpPrice] = useState<string>('');
   const [triggerPrice, setTriggerPrice] = useState<string>('');
@@ -97,11 +98,9 @@ const DemoTrading: React.FC<DemoTradingProps> = ({ user }) => {
     }, 5000);
   };
 
-  // Bid / Ask derived from mid price
   const bidPrice = demoPrice - (selectedPair.spread / 2);
   const askPrice = demoPrice + (selectedPair.spread / 2);
 
-  // Initialize simulation data
   useEffect(() => {
     const initial = Array.from({ length: 50 }, (_, i) => ({
       time: i.toString(),
@@ -112,7 +111,6 @@ const DemoTrading: React.FC<DemoTradingProps> = ({ user }) => {
     setSearchQuery('');
   }, [selectedPair]);
 
-  // Click outside listener for dropdown
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -123,9 +121,7 @@ const DemoTrading: React.FC<DemoTradingProps> = ({ user }) => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [dropdownRef]);
 
-  // Handle auto-liquidation, SL/TP, and Pending Triggers
   useEffect(() => {
-    // 1. Pending Order Triggers
     pendingOrders.forEach(order => {
       let triggered = false;
       if (order.type === 'BUY_LIMIT' && askPrice <= order.triggerPrice) triggered = true;
@@ -141,14 +137,11 @@ const DemoTrading: React.FC<DemoTradingProps> = ({ user }) => {
     });
 
     if (position) {
-      // 2. Binary Mode Expiration
       if (tradeType === 'BINARY' && timeLeft === 0) {
         const isWin = position.type === 'BUY' ? bidPrice > position.entry : askPrice < position.entry;
         const profit = isWin ? position.size * selectedPair.payout : -position.size;
         finalizeTrade(profit, isWin ? 'Target Reached' : 'Expired Out of Money');
       }
-      
-      // 3. Forex Mode SL/TP
       if (tradeType === 'FOREX') {
         if (position.sl && ((position.type === 'BUY' && bidPrice <= position.sl) || (position.type === 'SELL' && askPrice >= position.sl))) {
           finalizeTrade(pnl, 'Stop Loss Triggered');
@@ -157,8 +150,6 @@ const DemoTrading: React.FC<DemoTradingProps> = ({ user }) => {
           finalizeTrade(pnl, 'Take Profit Hit');
         }
       }
-
-      // 4. Margin Call Logic (Stop Out at 30%)
       const marginUsed = (position.size * position.entry) / position.leverage;
       const currentEquity = equity + pnl;
       const marginLevel = (currentEquity / marginUsed) * 100;
@@ -168,24 +159,20 @@ const DemoTrading: React.FC<DemoTradingProps> = ({ user }) => {
     }
   }, [timeLeft, position, bidPrice, askPrice, pnl, tradeType, pendingOrders, equity]);
 
-  // Price simulation loop
   useEffect(() => {
     timerRef.current = window.setInterval(() => {
       setDemoPrice(prev => {
         const change = (Math.random() - 0.5) * selectedPair.volatility; 
         const newPrice = prev + change;
-        
         setHistory(h => {
           const newHistory = [...h, { time: new Date().toLocaleTimeString(), price: newPrice }].slice(-50);
           return newHistory;
         });
-
         if (position) {
           if (tradeType === 'BINARY') {
             const isWinning = position.type === 'BUY' ? (newPrice - (selectedPair.spread/2)) > position.entry : (newPrice + (selectedPair.spread/2)) < position.entry;
             setPnl(isWinning ? position.size * selectedPair.payout : -position.size);
           } else {
-            // Forex P&L: (Price Difference / PipSize) * LotSize * Leverage Scaling
             const closePrice = position.type === 'BUY' ? (newPrice - (selectedPair.spread/2)) : (newPrice + (selectedPair.spread/2));
             const diff = position.type === 'BUY' ? (closePrice - position.entry) : (position.entry - closePrice);
             const pipProfit = (diff / selectedPair.pipSize) * (position.size / 100);
@@ -207,6 +194,21 @@ const DemoTrading: React.FC<DemoTradingProps> = ({ user }) => {
   }, [position, selectedPair, tradeType]);
 
   const executeOrder = (type: 'BUY' | 'SELL', entryPrice: number, size: number, leverage: number, sl?: number, tp?: number) => {
+    if (!isDemoMode) {
+      const margin = (size * entryPrice) / leverage;
+      onUpdateUser({ ...user, balance: (user.balance || 0) - margin });
+      onAddTransaction({
+        id: `TX-${Math.floor(Math.random()*100000)}`,
+        userId: user.id,
+        username: user.username,
+        amount: margin,
+        type: 'TRADE_OPEN',
+        status: 'COMPLETED',
+        timestamp: Date.now(),
+        details: `Live Entry: ${type} ${selectedPair.symbol} @ ${entryPrice.toFixed(selectedPair.precision)}`
+      });
+    }
+
     setPosition({ 
       entry: entryPrice, 
       size, 
@@ -222,7 +224,7 @@ const DemoTrading: React.FC<DemoTradingProps> = ({ user }) => {
 
   const handleTradeAction = (type: 'BUY' | 'SELL') => {
     if (position) {
-      finalizeTrade(pnl, 'Manual Close');
+      finalizeTrade(pnl, 'Manual Exit');
       return;
     }
 
@@ -230,7 +232,7 @@ const DemoTrading: React.FC<DemoTradingProps> = ({ user }) => {
     const marginNeeded = (amount * entry) / selectedLeverage;
 
     if (marginNeeded > equity) {
-      addNotification('Insufficient Margin for this trade', 'error');
+      addNotification('Insufficient Real Balance. Please deposit via Paybill to open live positions.', 'error');
       return;
     }
 
@@ -255,7 +257,25 @@ const DemoTrading: React.FC<DemoTradingProps> = ({ user }) => {
   };
 
   const finalizeTrade = (profit: number, reason: string) => {
-    setTotalDemoProfit(prev => prev + profit);
+    if (isDemoMode) {
+      setTotalDemoProfit(prev => prev + profit);
+    } else {
+      if (position) {
+        const margin = (position.size * position.entry) / position.leverage;
+        const totalReturn = margin + profit;
+        onUpdateUser({ ...user, balance: (user.balance || 0) + totalReturn });
+        onAddTransaction({
+          id: `TX-${Math.floor(Math.random()*100000)}`,
+          userId: user.id,
+          username: user.username,
+          amount: totalReturn,
+          type: 'TRADE_CLOSE',
+          status: 'COMPLETED',
+          timestamp: Date.now(),
+          details: `Live Exit: ${position.type} ${position.pair} (${reason}). P/L: $${profit.toFixed(2)}`
+        });
+      }
+    }
     setPosition(null);
     setTimeLeft(null);
     setPnl(0);
@@ -266,7 +286,7 @@ const DemoTrading: React.FC<DemoTradingProps> = ({ user }) => {
 
   const cancelPending = (id: string) => {
     setPendingOrders(prev => prev.filter(p => p.id !== id));
-    addNotification('Pending order cancelled', 'info');
+    addNotification('Order revoked', 'info');
   };
 
   const filteredPairs = TRADING_PAIRS.filter(p => 
@@ -280,8 +300,6 @@ const DemoTrading: React.FC<DemoTradingProps> = ({ user }) => {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in duration-700 pb-20 relative">
-      
-      {/* Toast Notifications */}
       <div className="fixed top-20 right-8 z-[60] flex flex-col space-y-3">
         {notifications.map(n => (
           <div key={n.id} className={`px-6 py-4 rounded-2xl border shadow-2xl animate-in slide-in-from-right duration-300 backdrop-blur-md flex items-center space-x-3 ${n.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : n.type === 'error' ? 'bg-rose-500/10 border-rose-500/30 text-rose-400' : 'bg-sky-500/10 border-sky-500/30 text-sky-400'}`}>
@@ -291,14 +309,13 @@ const DemoTrading: React.FC<DemoTradingProps> = ({ user }) => {
         ))}
       </div>
 
-      {/* Account Matrix Header */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         {[
-          { label: 'Equity', value: `$${currentEquity.toLocaleString()}`, color: 'sky' },
-          { label: 'Unrealized P/L', value: `${pnl >= 0 ? '+' : ''}$${pnl.toLocaleString()}`, color: pnl >= 0 ? 'emerald' : 'rose' },
-          { label: 'Margin Used', value: `$${marginUsed.toLocaleString()}`, color: 'slate' },
-          { label: 'Free Margin', value: `$${(currentEquity - marginUsed).toLocaleString()}`, color: 'emerald' },
-          { label: 'Margin Level', value: `${marginLevel > 0 ? marginLevel.toFixed(1) + '%' : '∞'}`, color: marginLevel < 100 && marginLevel > 0 ? 'rose' : 'emerald' },
+          { label: 'Equity Balance', value: `$${currentEquity.toLocaleString()}`, color: 'sky' },
+          { label: 'Running P/L', value: `${pnl >= 0 ? '+' : ''}$${pnl.toLocaleString()}`, color: pnl >= 0 ? 'emerald' : 'rose' },
+          { label: 'Total Exposure', value: `$${marginUsed.toLocaleString()}`, color: 'slate' },
+          { label: 'Unused Margin', value: `$${(currentEquity - marginUsed).toLocaleString()}`, color: 'emerald' },
+          { label: 'Safety Factor', value: `${marginLevel > 0 ? marginLevel.toFixed(1) + '%' : '∞'}`, color: marginLevel < 100 && marginLevel > 0 ? 'rose' : 'emerald' },
         ].map((stat, i) => (
           <div key={i} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 shadow-sm">
              <div className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">{stat.label}</div>
@@ -307,7 +324,6 @@ const DemoTrading: React.FC<DemoTradingProps> = ({ user }) => {
         ))}
       </div>
 
-      {/* Main Controls Section with Asset Selector Dropdown */}
       <div className="flex flex-col lg:flex-row gap-6 relative z-50">
         <div className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2rem] p-4 flex items-center shadow-sm relative" ref={dropdownRef}>
            <button 
@@ -317,7 +333,7 @@ const DemoTrading: React.FC<DemoTradingProps> = ({ user }) => {
            >
              <div className="w-10 h-10 bg-sky-500/10 rounded-xl flex items-center justify-center font-black text-sky-500 uppercase">{selectedPair.symbol[0]}</div>
              <div className="text-left">
-               <div className="text-xs font-black uppercase tracking-widest text-slate-400">Trading Asset</div>
+               <div className="text-xs font-black uppercase tracking-widest text-slate-400">Trade Configuration</div>
                <div className="text-sm font-bold text-slate-900 dark:text-white flex items-center">
                  {selectedPair.symbol} 
                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`ml-2 transition-transform duration-300 ${isDropdownOpen ? 'rotate-180' : ''}`}><path d="m6 9 6 6 6-6"/></svg>
@@ -325,44 +341,39 @@ const DemoTrading: React.FC<DemoTradingProps> = ({ user }) => {
              </div>
            </button>
 
-           {/* The Asset Selector Dropdown */}
            {isDropdownOpen && (
              <div className="absolute top-full left-0 mt-2 w-full lg:w-[450px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl p-4 animate-in slide-in-from-top-2 z-[100] backdrop-blur-xl">
                <div className="relative mb-4">
                  <input 
                   type="text" 
                   autoFocus
-                  placeholder="Search assets..." 
+                  placeholder="Find assets..." 
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                   className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm focus:border-sky-500 outline-none"
                  />
                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                </div>
-               
-               <div className="max-h-[350px] overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+               <div className="max-h-[350px] overflow-y-auto space-y-1 pr-1">
                  {filteredPairs.map(pair => (
                    <button 
                     key={pair.symbol}
                     onClick={() => { setSelectedPair(pair); setIsDropdownOpen(false); }}
-                    className={`w-full flex items-center justify-between p-3 rounded-xl transition-all ${selectedPair.symbol === pair.symbol ? 'bg-sky-500 text-white' : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400'}`}
+                    className={`w-full flex items-center justify-between p-3 rounded-xl transition-all ${selectedPair.symbol === pair.symbol ? 'bg-sky-500 text-white' : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500'}`}
                    >
                      <div className="flex items-center space-x-3">
-                       <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-[10px] ${selectedPair.symbol === pair.symbol ? 'bg-white/20 text-white' : 'bg-sky-500/10 text-sky-500'}`}>{pair.symbol[0]}</div>
+                       <div className="w-8 h-8 rounded-lg flex items-center justify-center font-black text-[10px] bg-sky-500/10 text-sky-500">{pair.symbol[0]}</div>
                        <div className="text-left">
-                         <div className={`text-xs font-bold ${selectedPair.symbol === pair.symbol ? 'text-white' : 'text-slate-900 dark:text-slate-100'}`}>{pair.symbol}</div>
-                         <div className={`text-[10px] ${selectedPair.symbol === pair.symbol ? 'text-white/70' : 'text-slate-500'}`}>{pair.displayName}</div>
+                         <div className="text-xs font-bold">{pair.symbol}</div>
+                         <div className="text-[10px] text-slate-500">{pair.displayName}</div>
                        </div>
                      </div>
                      <div className="text-right">
-                       <div className={`text-xs font-mono font-bold ${selectedPair.symbol === pair.symbol ? 'text-white' : 'text-slate-900 dark:text-slate-100'}`}>${pair.basePrice.toLocaleString()}</div>
-                       <div className={`text-[9px] font-black uppercase ${selectedPair.symbol === pair.symbol ? 'text-white/70' : 'text-sky-500'}`}>{pair.category}</div>
+                       <div className="text-xs font-mono font-bold">${pair.basePrice.toLocaleString()}</div>
+                       <div className="text-[9px] font-black uppercase text-sky-500">{pair.category}</div>
                      </div>
                    </button>
                  ))}
-                 {filteredPairs.length === 0 && (
-                   <div className="p-10 text-center text-slate-500 italic text-sm">No assets found matching "{searchQuery}"</div>
-                 )}
                </div>
              </div>
            )}
@@ -376,14 +387,9 @@ const DemoTrading: React.FC<DemoTradingProps> = ({ user }) => {
                <div className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">Leverage</div>
                <div className="text-xs font-mono font-bold text-slate-900 dark:text-white">Up to 1:{LEVERAGE_OPTIONS[LEVERAGE_OPTIONS.length-1]}</div>
              </div>
-             <div className="text-center">
-               <div className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">Fixed Payout</div>
-               <div className="text-xs font-mono font-bold text-amber-500">{(selectedPair.payout * 100).toFixed(0)}%</div>
-             </div>
            </div>
         </div>
 
-        {/* Trade Type Switcher */}
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2rem] p-2 flex items-center shadow-sm">
            <button 
             onClick={() => { setTradeType('FOREX'); setPosition(null); }}
@@ -401,8 +407,6 @@ const DemoTrading: React.FC<DemoTradingProps> = ({ user }) => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 relative z-10">
-        
-        {/* Real-time Chart */}
         <div className="lg:col-span-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] p-8 shadow-sm relative overflow-hidden">
           <div className="flex items-center justify-between mb-8">
              <div className="flex items-center space-x-4">
@@ -420,7 +424,6 @@ const DemoTrading: React.FC<DemoTradingProps> = ({ user }) => {
                {demoPrice.toLocaleString(undefined, { minimumFractionDigits: selectedPair.precision, maximumFractionDigits: selectedPair.precision })}
              </div>
           </div>
-
           <div className="h-[480px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={history}>
@@ -433,221 +436,65 @@ const DemoTrading: React.FC<DemoTradingProps> = ({ user }) => {
                 <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-slate-100 dark:text-slate-800/40" vertical={false} />
                 <XAxis dataKey="time" hide />
                 <YAxis domain={['auto', 'auto']} hide />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '12px', fontSize: '10px', color: '#fff' }}
-                />
-                <Area 
-                  type="monotone" 
-                  dataKey="price" 
-                  stroke="#0ea5e9" 
-                  strokeWidth={3} 
-                  fill="url(#tradeGradient)" 
-                  isAnimationActive={false}
-                />
-                
+                <Tooltip contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '12px', fontSize: '10px', color: '#fff' }} />
+                <Area type="monotone" dataKey="price" stroke="#0ea5e9" strokeWidth={3} fill="url(#tradeGradient)" isAnimationActive={false} />
                 {position && (
-                  <>
-                    <ReferenceLine 
-                      y={position.entry} 
-                      stroke="#64748b" 
-                      strokeDasharray="5 5"
-                      strokeWidth={2}
-                      label={{ position: 'right', value: `ENTRY: ${position.entry.toFixed(selectedPair.precision)}`, fill: '#64748b', fontSize: 10, fontWeight: 'bold' }}
-                    />
-                    {position.sl && <ReferenceLine y={position.sl} stroke="#f43f5e" strokeDasharray="3 3" />}
-                    {position.tp && <ReferenceLine y={position.tp} stroke="#10b981" strokeDasharray="3 3" />}
-                  </>
+                  <ReferenceLine y={position.entry} stroke="#64748b" strokeDasharray="5 5" strokeWidth={2} label={{ position: 'right', value: `ENTRY: ${position.entry.toFixed(selectedPair.precision)}`, fill: '#64748b', fontSize: 10, fontWeight: 'bold' }} />
                 )}
-                {pendingOrders.filter(o => o.pair === selectedPair.symbol).map(o => (
-                  <ReferenceLine key={o.id} y={o.triggerPrice} stroke="#0ea5e9" strokeDasharray="10 5" strokeOpacity={0.4} />
-                ))}
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Execution Cabinet Sidebar */}
         <div className="lg:col-span-1 space-y-6">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] p-8 shadow-sm">
             <div className="flex items-center justify-between mb-8">
-               <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Execution Terminal</h3>
-               <div className="flex bg-slate-100 dark:bg-slate-950 p-1 rounded-xl">
-                 <button onClick={() => setExecType('MARKET')} className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${execType === 'MARKET' ? 'bg-sky-500 text-white' : 'text-slate-500'}`}>Market</button>
-                 <button onClick={() => setExecType('PENDING')} className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${execType === 'PENDING' ? 'bg-sky-500 text-white' : 'text-slate-500'}`}>Pending</button>
-               </div>
+               <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Live Terminal</h3>
             </div>
-            
             <div className="space-y-6">
-              {execType === 'PENDING' && !position && (
-                <div className="space-y-3">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Order Type</label>
-                  <select 
-                    value={pendingType}
-                    onChange={(e) => setPendingType(e.target.value as PendingOrderType)}
-                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-xs font-black uppercase tracking-widest text-sky-500"
-                  >
-                    <option value="BUY_LIMIT">Buy Limit</option>
-                    <option value="SELL_LIMIT">Sell Limit</option>
-                    <option value="BUY_STOP">Buy Stop</option>
-                    <option value="SELL_STOP">Sell Stop</option>
-                  </select>
-                  <input 
-                    type="number" 
-                    step={selectedPair.pipSize} 
-                    value={triggerPrice}
-                    onChange={e => setTriggerPrice(e.target.value)}
-                    placeholder="Trigger Price"
-                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-6 py-4 text-xl font-mono focus:border-sky-500 outline-none"
-                  />
-                </div>
-              )}
-
-              {/* Conditional Controls */}
-              {tradeType === 'BINARY' ? (
-                <div className="space-y-3">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Expiration</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {EXPIRATION_OPTIONS.map(opt => (
-                      <button 
-                        key={opt.value}
-                        onClick={() => setSelectedExpiration(opt.value)}
-                        disabled={!!position}
-                        className={`py-2.5 rounded-xl text-xs font-black transition-all border ${selectedExpiration === opt.value ? 'bg-amber-500 border-amber-500 text-slate-950' : 'bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-500'}`}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Leverage</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {LEVERAGE_OPTIONS.map(opt => (
-                      <button 
-                        key={opt}
-                        onClick={() => setSelectedLeverage(opt)}
-                        disabled={!!position}
-                        className={`py-2.5 rounded-xl text-xs font-black transition-all border ${selectedLeverage === opt ? 'bg-sky-500 border-sky-500 text-white' : 'bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-500'}`}
-                      >
-                        1:{opt}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Amount Input */}
               <div className="space-y-3">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Lot / Investment Size</label>
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Entry Size</label>
                 <input 
                   type="number"
                   value={amount}
                   onChange={(e) => setAmount(Math.max(1, parseInt(e.target.value) || 0))}
-                  disabled={!!position}
-                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-6 py-4 text-2xl font-mono font-black focus:border-sky-500 outline-none transition-all disabled:opacity-50"
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-6 py-4 text-2xl font-mono font-black focus:border-sky-500 outline-none transition-all"
                 />
               </div>
 
-              {/* SL / TP for Forex */}
-              {tradeType === 'FOREX' && !position && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <label className="text-[9px] font-black text-rose-500 uppercase tracking-widest ml-1">Stop Loss</label>
-                    <input 
-                      type="number" 
-                      step={selectedPair.pipSize} 
-                      value={slPrice}
-                      onChange={e => setSlPrice(e.target.value)}
-                      placeholder="None"
-                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-xs font-mono"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[9px] font-black text-emerald-500 uppercase tracking-widest ml-1">Take Profit</label>
-                    <input 
-                      type="number" 
-                      step={selectedPair.pipSize} 
-                      value={tpPrice}
-                      onChange={e => setTpPrice(e.target.value)}
-                      placeholder="None"
-                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-xs font-mono"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Real-time P/L Monitor (Visible only when position is active) */}
               {position && (
                 <div className="p-6 bg-slate-50 dark:bg-slate-950 rounded-3xl border border-slate-200 dark:border-slate-800 animate-in zoom-in-95">
                   <div className="flex justify-between items-center mb-4">
                      <span className={`text-[10px] font-black px-3 py-1 rounded-full ${position.type === 'BUY' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>
-                       {position.type} ACTIVE
+                       {position.type} EXECUTED
                      </span>
-                     {tradeType === 'BINARY' && <div className="text-xs font-mono font-black text-amber-500">{timeLeft}s</div>}
                   </div>
                   <div className={`text-4xl font-mono font-black leading-none mb-2 ${pnl >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
                     {pnl >= 0 ? '+' : ''}${pnl.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </div>
-                  <div className="text-[9px] text-slate-500 uppercase font-bold tracking-tighter">Running Profit/Loss</div>
                 </div>
               )}
 
-              {/* Buy & Sell Buttons: Opening or Closing */}
               <div className="space-y-3 pt-4">
                 <button 
                   onClick={() => handleTradeAction('BUY')}
-                  className={`w-full py-6 font-black rounded-2xl shadow-xl transition-all active:scale-95 flex flex-col items-center justify-center group ${
-                    position 
-                      ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-500/20' 
-                      : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/20'
-                  }`}
+                  className={`w-full py-6 font-black rounded-2xl shadow-xl transition-all active:scale-95 flex flex-col items-center justify-center group ${position ? 'bg-amber-500 text-slate-950' : 'bg-emerald-500 text-slate-950'}`}
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" className="mb-1 group-hover:-translate-y-1 transition-transform"><path d="m18 15-6-6-6 6"/></svg>
                   <span className="text-sm uppercase tracking-[0.2em]">
                     {position ? 'Close Position' : `Buy @ ${askPrice.toFixed(selectedPair.precision)}`}
                   </span>
                 </button>
-                
                 <button 
                   onClick={() => handleTradeAction('SELL')}
-                  className={`w-full py-6 font-black rounded-2xl shadow-xl transition-all active:scale-95 flex flex-col items-center justify-center group ${
-                    position 
-                      ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/20' 
-                      : 'bg-rose-500 hover:bg-rose-400 text-white shadow-rose-500/20'
-                  }`}
+                  className={`w-full py-6 font-black rounded-2xl shadow-xl transition-all active:scale-95 flex flex-col items-center justify-center group ${position ? 'bg-rose-600 text-white' : 'bg-rose-500 text-white'}`}
                 >
                   <span className="text-sm uppercase tracking-[0.2em]">
                     {position ? 'Close Position' : `Sell @ ${bidPrice.toFixed(selectedPair.precision)}`}
                   </span>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" className="mt-1 group-hover:translate-y-1 transition-transform"><path d="m6 9 6 6 6-6"/></svg>
                 </button>
               </div>
             </div>
           </div>
-          
-          {/* Pending Orders List */}
-          {pendingOrders.length > 0 && (
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] p-6 shadow-sm overflow-hidden">
-              <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Pending Stack ({pendingOrders.length})</h4>
-              <div className="space-y-3 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
-                {pendingOrders.map(p => (
-                  <div key={p.id} className="p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl group relative">
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="text-[10px] font-black text-sky-500">{p.type}</span>
-                      <button onClick={() => cancelPending(p.id)} className="text-rose-500 hover:text-rose-600">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6L6 18M6 6l12 12"/></svg>
-                      </button>
-                    </div>
-                    <div className="flex justify-between items-end">
-                      <div className="font-mono text-xs font-bold text-slate-800 dark:text-slate-200">{p.triggerPrice.toFixed(selectedPair.precision)}</div>
-                      <div className="text-[9px] text-slate-400">{p.size} Units</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>
