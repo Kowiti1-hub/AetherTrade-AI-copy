@@ -1,6 +1,6 @@
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="scroll-smooth">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
@@ -29,11 +29,14 @@
         height: 100%;
         margin: 0;
         padding: 0;
-        overflow: hidden;
+      }
+      html {
+        scroll-behavior: smooth;
       }
       body {
         font-family: 'Inter', sans-serif;
         transition: background-color 0.3s ease, color 0.3s ease;
+        overflow-x: hidden;
       }
       .dark body {
         background-color: #020617;
@@ -51,6 +54,11 @@
       .dark ::-webkit-scrollbar-thumb { background: #334155; }
       ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
       .dark ::-webkit-scrollbar-thumb:hover { background: #475569; }
+      
+      /* Smooth scroll offset fix for sticky headers */
+      [id] {
+        scroll-margin-top: 5rem;
+      }
     </style>
   <script type="importmap">
 {

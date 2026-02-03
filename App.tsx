@@ -6,6 +6,7 @@ import Dashboard from './components/Dashboard';
 import MarketInsights from './components/MarketInsights';
 import StrategyBuilder from './components/StrategyBuilder';
 import LiveAssistant from './components/LiveAssistant';
+import AboutSystem from './components/AboutSystem';
 import SecurityHub from './components/SecurityHub';
 import AdminUserManagement from './components/AdminUserManagement';
 import AdminWithdrawals from './components/AdminWithdrawals';
@@ -68,6 +69,8 @@ const App: React.FC = () => {
     const isActive = activeView === view;
     const activeClasses = color === 'amber' 
       ? 'bg-amber-500/10 text-amber-500 dark:text-amber-400 border border-amber-500/20 shadow-[0_0_15px_rgba(245,158,11,0.15)]'
+      : color === 'rose'
+      ? 'bg-rose-500/10 text-rose-500 border border-rose-500/20 shadow-[0_0_15px_rgba(244,63,94,0.15)]'
       : 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 shadow-[0_0_15px_rgba(14,165,233,0.15)]';
     
     return (
@@ -129,6 +132,8 @@ const App: React.FC = () => {
                 icon={() => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>} 
                 label="Profile" 
               />
+              <div className="pt-2"></div>
+              <NavItem view={AppView.ABOUT_SYSTEM} icon={ICONS.Security} label="About System" />
             </>
           )}
 
@@ -137,8 +142,10 @@ const App: React.FC = () => {
               <div className="pt-4 pb-2 px-4 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em]">Administration</div>
               <NavItem view={AppView.USER_MANAGEMENT} icon={() => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>} label="User Manager" />
               <NavItem view={AppView.WITHDRAWAL_REQUESTS} icon={() => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20"/><path d="m17 5-5-3-5 3"/><path d="m17 19-5 3-5-3"/><path d="M2 12h20"/></svg>} label="Withdrawals" />
+              <NavItem view={AppView.SECURITY_HUB} icon={() => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg>} label="Security Command" color="rose" />
               <NavItem view={AppView.TRANSACTION_HISTORY} icon={() => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>} label="Global Logs" />
-              <NavItem view={AppView.SECURITY_HUB} icon={ICONS.Security} label="MTD Security" />
+              <div className="pt-2"></div>
+              <NavItem view={AppView.ABOUT_SYSTEM} icon={ICONS.Security} label="About System" />
             </>
           )}
         </nav>
@@ -177,7 +184,7 @@ const App: React.FC = () => {
             <div className="flex items-center space-x-2">
               <span className="text-slate-500 font-medium capitalize">{user.role.toLowerCase()}</span>
               <span className="text-slate-300 dark:text-slate-700">/</span>
-              <span className={`font-semibold uppercase tracking-wider text-sm ${activeView === AppView.DEMO_TRADING ? 'text-amber-500 dark:text-amber-400' : 'text-sky-600 dark:text-sky-400'}`}>
+              <span className={`font-semibold uppercase tracking-wider text-sm ${activeView === AppView.DEMO_TRADING ? 'text-amber-500 dark:text-amber-400' : activeView === AppView.SECURITY_HUB ? 'text-rose-500' : 'text-sky-600 dark:text-sky-400'}`}>
                 {activeView.replace(/_/g, ' ')}
               </span>
             </div>
@@ -224,6 +231,7 @@ const App: React.FC = () => {
           {activeView === AppView.MARKET_INSIGHTS && <MarketInsights />}
           {activeView === AppView.STRATEGY_BUILDER && <StrategyBuilder />}
           {activeView === AppView.LIVE_ASSISTANT && <LiveAssistant />}
+          {activeView === AppView.ABOUT_SYSTEM && <AboutSystem />}
           {activeView === AppView.SECURITY_HUB && <SecurityHub />}
           {activeView === AppView.USER_MANAGEMENT && <AdminUserManagement />}
           {activeView === AppView.WITHDRAWAL_REQUESTS && <AdminWithdrawals transactions={transactions} onUpdateTransactions={setTransactions} onUpdateUser={handleUpdateUser} />}

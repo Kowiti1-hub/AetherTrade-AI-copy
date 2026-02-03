@@ -34,7 +34,11 @@ const Dashboard: React.FC = () => {
   const [assets, setAssets] = useState<MarketAsset[]>(MOCK_ASSETS);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [updating, setUpdating] = useState(false);
-  const [volumeSortOrder, setVolumeSortOrder] = useState<'asc' | 'desc' | 'none'>('none');
+  
+  // Sort state management
+  const [sortField, setSortField] = useState<'volume' | 'price' | 'none'>('none');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  
   const prevPrices = useRef<Record<string, number>>({});
 
   useEffect(() => {
@@ -61,20 +65,36 @@ const Dashboard: React.FC = () => {
   };
 
   const sortedAssets = useMemo(() => {
-    if (volumeSortOrder === 'none') return assets;
+    if (sortField === 'none') return assets;
+    
     return [...assets].sort((a, b) => {
-      const volA = parseVolume(a.volume24h);
-      const volB = parseVolume(b.volume24h);
-      return volumeSortOrder === 'asc' ? volA - volB : volB - volA;
+      let valA: number, valB: number;
+      
+      if (sortField === 'volume') {
+        valA = parseVolume(a.volume24h);
+        valB = parseVolume(b.volume24h);
+      } else {
+        // sortField === 'price'
+        valA = a.price;
+        valB = b.price;
+      }
+      
+      return sortOrder === 'asc' ? valA - valB : valB - valA;
     });
-  }, [assets, volumeSortOrder]);
+  }, [assets, sortField, sortOrder]);
 
-  const toggleSort = () => {
-    setVolumeSortOrder(prev => {
-      if (prev === 'none') return 'desc';
-      if (prev === 'desc') return 'asc';
-      return 'none';
-    });
+  const toggleSort = (field: 'volume' | 'price') => {
+    if (sortField === field) {
+      if (sortOrder === 'desc') {
+        setSortOrder('asc');
+      } else {
+        setSortField('none');
+        setSortOrder('desc');
+      }
+    } else {
+      setSortField(field);
+      setSortOrder('desc');
+    }
   };
 
   return (
@@ -100,24 +120,52 @@ const Dashboard: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Watchlist with Forex Spreads */}
+        {/* Watchlist with Sorting Capabilities */}
         <div className="lg:col-span-2 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center space-x-3">
               <h3 className="text-lg font-bold text-slate-900 dark:text-white">Live Market Watchlist</h3>
-              <button 
-                onClick={toggleSort}
-                className={`flex items-center space-x-1 px-3 py-1 rounded-lg border text-[10px] font-black uppercase tracking-widest transition-all ${
-                  volumeSortOrder !== 'none' 
-                    ? 'bg-sky-500/10 border-sky-500/30 text-sky-500' 
-                    : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500'
-                }`}
-              >
-                <span>Vol 24h</span>
-                {volumeSortOrder === 'desc' && <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></svg>}
-                {volumeSortOrder === 'asc' && <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="rotate-180"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></svg>}
-                {volumeSortOrder === 'none' && <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="opacity-40"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></svg>}
-              </button>
+              <div className="flex items-center space-x-2">
+                <button 
+                  onClick={() => toggleSort('volume')}
+                  className={`flex items-center space-x-1 px-3 py-1 rounded-lg border text-[10px] font-black uppercase tracking-widest transition-all ${
+                    sortField === 'volume' 
+                      ? 'bg-sky-500/10 border-sky-500/30 text-sky-500' 
+                      : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500'
+                  }`}
+                >
+                  <span>Vol 24h</span>
+                  {sortField === 'volume' ? (
+                    sortOrder === 'desc' ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="rotate-180"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></svg>
+                    )
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="opacity-40"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></svg>
+                  )}
+                </button>
+
+                <button 
+                  onClick={() => toggleSort('price')}
+                  className={`flex items-center space-x-1 px-3 py-1 rounded-lg border text-[10px] font-black uppercase tracking-widest transition-all ${
+                    sortField === 'price' 
+                      ? 'bg-sky-500/10 border-sky-500/30 text-sky-500' 
+                      : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500'
+                  }`}
+                >
+                  <span>Price</span>
+                  {sortField === 'price' ? (
+                    sortOrder === 'desc' ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="rotate-180"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></svg>
+                    )
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="opacity-40"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></svg>
+                  )}
+                </button>
+              </div>
             </div>
             <div className="flex items-center space-x-2">
               <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
