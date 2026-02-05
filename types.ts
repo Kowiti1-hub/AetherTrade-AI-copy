@@ -17,6 +17,7 @@ export interface TradingStrategy {
   entryCondition: string;
   exitCondition: string;
   timeframe: string;
+  drawings?: any[];
 }
 
 export enum UserRole {

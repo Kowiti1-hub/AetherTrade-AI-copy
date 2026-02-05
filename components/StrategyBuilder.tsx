@@ -49,6 +49,17 @@ const StrategyBuilder: React.FC = () => {
   const [startDate, setStartDate] = useState('2024-01-01');
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [initialCapital, setInitialCapital] = useState('10000');
+  
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Effect to load drawings when strategy changes
+  useEffect(() => {
+    if (strategy?.drawings) {
+      setDrawings(strategy.drawings);
+    } else {
+      setDrawings([]);
+    }
+  }, [strategy]);
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
@@ -65,11 +76,24 @@ const StrategyBuilder: React.FC = () => {
     }
   };
 
+  const handleSaveStrategy = () => {
+    if (!strategy) return;
+    setIsSaving(true);
+    // Simulate API persistence
+    setTimeout(() => {
+      setStrategy({
+        ...strategy,
+        drawings: [...drawings]
+      });
+      setIsSaving(false);
+      alert("Strategy configuration and chart annotations persisted to memory.");
+    }, 800);
+  };
+
   const runBacktest = () => {
     if (!strategy) return;
     setIsBacktesting(true);
     setBacktestResult(null);
-    setDrawings([]);
 
     const capital = parseFloat(initialCapital) || 10000;
     const start = new Date(startDate).getTime();
@@ -92,15 +116,12 @@ const StrategyBuilder: React.FC = () => {
         
         // Marker Generation Logic
         if (i > 0 && i < steps - 1) {
-          // Entry Marker
           if (Math.random() > 0.85 && markers.filter(m => m.type === 'ENTRY').length < 5) {
             markers.push({ x: i, y: currentEquity, type: 'ENTRY', note: 'Alpha Condition Met' });
           }
-          // Exit Marker (typically follows an entry)
           else if (Math.random() > 0.8 && markers.length > 0 && markers[markers.length-1].type === 'ENTRY') {
              markers.push({ x: i, y: currentEquity, type: 'EXIT', note: 'Take Profit Triggered' });
           }
-          // Significant Drawdown Marker
           if (currentEquity < lastPeak * 0.95) {
             if (!markers.some(m => m.type === 'DRAWDOWN' && Math.abs(m.x - i) < 5)) {
               markers.push({ x: i, y: currentEquity, type: 'DRAWDOWN', note: 'Local Trough Detected' });
@@ -168,8 +189,7 @@ const StrategyBuilder: React.FC = () => {
 
   const clearDrawings = () => setDrawings([]);
 
-  // Fix: Added key prop to interface to resolve TS error when used in map or with key prop
-  const FibonacciLevels = ({ y1, y2, x1, x2 }: { y1: number, y2: number, x1: number, x2: number, key?: React.Key }) => {
+  const FibonacciLevels = ({ y1, y2, x1, x2 }: { y1: number, y2: number, x1: number, x2: number }) => {
     const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
     const diff = y2 - y1;
     return (
@@ -198,13 +218,12 @@ const StrategyBuilder: React.FC = () => {
     );
   };
 
-  // Custom Dot component to render markers on the chart
   const CustomChartDot = (props: any) => {
     const { cx, cy, payload, markers } = props;
     const marker = markers.find((m: StrategyMarker) => m.x === payload.x);
     if (!marker) return null;
 
-    let color = '#10b981'; // Default Entry
+    let color = '#10b981';
     let char = 'E';
     let label = 'Entry';
 
@@ -358,38 +377,37 @@ const StrategyBuilder: React.FC = () => {
                     <div className="w-12 border-r border-slate-200 dark:border-slate-800 pr-4 mr-4 flex flex-col space-y-3 shrink-0">
                        <button 
                         onClick={() => setActiveTool('none')}
-                        className={`p-2.5 rounded-xl transition-all ${activeTool === 'none' ? 'bg-sky-500 text-white' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
-                        title="Pointer"
+                        className={`p-2.5 rounded-xl transition-all ${activeTool === 'none' ? 'bg-sky-500 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
+                        title="Pointer Tool"
                        >
                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m3 3 7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/><path d="m13 13 6 6"/></svg>
                        </button>
                        <button 
                         onClick={() => setActiveTool('trendline')}
-                        className={`p-2.5 rounded-xl transition-all ${activeTool === 'trendline' ? 'bg-sky-500 text-white' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
-                        title="Trendline"
+                        className={`p-2.5 rounded-xl transition-all ${activeTool === 'trendline' ? 'bg-sky-500 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
+                        title="Trendline Tool"
                        >
                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="19" x2="5" y1="5" y2="19"/><circle cx="19" cy="5" r="2"/><circle cx="5" cy="19" r="2"/></svg>
                        </button>
                        <button 
                         onClick={() => setActiveTool('horizontal')}
-                        className={`p-2.5 rounded-xl transition-all ${activeTool === 'horizontal' ? 'bg-sky-500 text-white' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
-                        title="Horizontal Line"
+                        className={`p-2.5 rounded-xl transition-all ${activeTool === 'horizontal' ? 'bg-sky-500 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
+                        title="Horizontal Support/Resistance"
                        >
                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="3" x2="21" y1="12" y2="12"/><circle cx="12" cy="12" r="2"/></svg>
                        </button>
                        <button 
                         onClick={() => setActiveTool('fibonacci')}
-                        className={`p-2.5 rounded-xl transition-all ${activeTool === 'fibonacci' ? 'bg-sky-500 text-white' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
-                        title="Fibonacci Retracement"
+                        className={`p-2.5 rounded-xl transition-all ${activeTool === 'fibonacci' ? 'bg-sky-500 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
+                        title="Fibonacci Levels"
                        >
-                         {/* Fix: Removed duplicate x2 attribute */}
                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="3" x2="21" y1="6" y2="6"/><line x1="3" x2="21" y1="12" y2="12"/><line x1="3" x2="21" y1="18" y2="18"/><path d="M12 3v18"/></svg>
                        </button>
                        <div className="pt-4 mt-4 border-t border-slate-200 dark:border-slate-800">
                           <button 
                             onClick={clearDrawings}
                             className="p-2.5 rounded-xl text-rose-500 hover:bg-rose-500/10 transition-all"
-                            title="Clear All Drawings"
+                            title="Clear Analysis Layer"
                           >
                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
                           </button>
@@ -464,7 +482,6 @@ const StrategyBuilder: React.FC = () => {
                                 />
                               );
                             case 'fibonacci':
-                              { /* Fix: Added key prop to FibonacciLevels call */ }
                               return <FibonacciLevels key={drawing.id} x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} />;
                             default:
                               return null;
@@ -472,7 +489,6 @@ const StrategyBuilder: React.FC = () => {
                         })}
                       </svg>
                       
-                      {/* Read-only drawings (displayed when tool is none) */}
                       {activeTool === 'none' && (
                          <svg className="absolute inset-0 pointer-events-none">
                             {drawings.map((drawing) => {
@@ -484,7 +500,6 @@ const StrategyBuilder: React.FC = () => {
                                 case 'horizontal':
                                   return <line key={drawing.id} x1="0" y1={p1.y} x2="100%" y2={p1.y} stroke="#f59e0b" strokeWidth="2" strokeDasharray="5 5" strokeOpacity="0.6" />;
                                 case 'fibonacci':
-                                  { /* Fix: Added key prop to FibonacciLevels call */ }
                                   return <FibonacciLevels key={drawing.id} x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} />;
                                 default: return null;
                               }
@@ -547,21 +562,35 @@ const StrategyBuilder: React.FC = () => {
                    </div>
                  </div>
 
-                 <div className="grid grid-cols-2 gap-3 mt-8">
-                    <button 
-                      onClick={runBacktest}
-                      disabled={isBacktesting}
-                      className="py-3.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-white text-xs font-black rounded-xl border border-slate-200 dark:border-slate-700 transition-all flex items-center justify-center space-x-2"
-                    >
-                      {isBacktesting ? (
-                         <div className="w-3.5 h-3.5 border-2 border-slate-400 border-t-slate-900 dark:border-t-white rounded-full animate-spin"></div>
-                      ) : (
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                      )}
-                      <span>Backtest</span>
-                    </button>
-                    <button className="py-3.5 bg-sky-500 hover:bg-sky-400 text-white dark:text-slate-950 text-xs font-black rounded-xl shadow-lg shadow-sky-500/20 transition-all">
-                      Deploy Live
+                 <div className="flex flex-col space-y-3 mt-8">
+                    <div className="grid grid-cols-2 gap-3">
+                      <button 
+                        onClick={runBacktest}
+                        disabled={isBacktesting}
+                        className="py-3.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-white text-xs font-black rounded-xl border border-slate-200 dark:border-slate-700 transition-all flex items-center justify-center space-x-2"
+                      >
+                        {isBacktesting ? (
+                           <div className="w-3.5 h-3.5 border-2 border-slate-400 border-t-slate-900 dark:border-t-white rounded-full animate-spin"></div>
+                        ) : (
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                        )}
+                        <span>Run Simulation</span>
+                      </button>
+                      <button 
+                        onClick={handleSaveStrategy}
+                        disabled={isSaving}
+                        className="py-3.5 bg-sky-500 hover:bg-sky-400 text-white dark:text-slate-950 text-xs font-black rounded-xl shadow-lg shadow-sky-500/20 transition-all flex items-center justify-center space-x-2"
+                      >
+                        {isSaving ? (
+                          <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin"></div>
+                        ) : (
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                        )}
+                        <span>Commit Layout</span>
+                      </button>
+                    </div>
+                    <button className="w-full py-4 bg-violet-600 hover:bg-violet-500 text-white text-xs font-black rounded-xl shadow-lg shadow-violet-500/20 transition-all">
+                      Deploy Institutional Core
                     </button>
                  </div>
               </div>

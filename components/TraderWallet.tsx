@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { User, PaymentMethodType, LinkedAccount, Transaction } from '../types';
 
 interface TraderWalletProps {
@@ -7,6 +7,11 @@ interface TraderWalletProps {
   onUpdateUser: (user: User) => void;
   onAddTransaction: (tx: Transaction) => void;
 }
+
+const WITHDRAWAL_LIMITS = {
+  TRANSACTION: 10000,
+  DAILY: 50000
+};
 
 const TraderWallet: React.FC<TraderWalletProps> = ({ user, onUpdateUser, onAddTransaction }) => {
   const [activeTab, setActiveTab] = useState<'DEPOSIT' | 'WITHDRAWAL'>('DEPOSIT');
@@ -17,10 +22,17 @@ const TraderWallet: React.FC<TraderWalletProps> = ({ user, onUpdateUser, onAddTr
   const [validationError, setValidationError] = useState<string | null>(null);
   const [showAddMethod, setShowAddMethod] = useState(false);
   const [newMethodType, setNewMethodType] = useState<PaymentMethodType>('MOBILE');
+  
+  // Simulated session-based daily total
+  const [dailyWithdrawalTotal, setDailyWithdrawalTotal] = useState(0);
 
   const [linkedAccounts, setLinkedAccounts] = useState<LinkedAccount[]>(user.linkedAccounts || [
     { id: 'm1', type: 'MOBILE', label: 'Primary Mobile Wallet', details: user.phone || '', provider: 'M-PESA' }
   ]);
+
+  const remainingDailyLimit = useMemo(() => 
+    Math.max(0, WITHDRAWAL_LIMITS.DAILY - dailyWithdrawalTotal)
+  , [dailyWithdrawalTotal]);
 
   const handleTransaction = (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,13 +49,28 @@ const TraderWallet: React.FC<TraderWalletProps> = ({ user, onUpdateUser, onAddTr
         setValidationError("Please select a payout channel (where you want the funds to be sent).");
         return;
       }
+      
       const selectedMethod = linkedAccounts.find(a => a.id === selectedMethodId);
       if (selectedMethod?.type === 'MOBILE' && !selectedMethod.details.match(/^\+?[0-9]{7,15}$/)) {
         setValidationError("The selected mobile channel has an invalid phone number.");
         return;
       }
+
+      // 1. Balance Check
       if (numAmount > (user.balance || 0)) {
-        setValidationError(`Insufficient balance. Available: $${(user.balance || 0).toLocaleString()}`);
+        setValidationError(`Insufficient balance. Your liquid equity is $${(user.balance || 0).toLocaleString()}`);
+        return;
+      }
+
+      // 2. Transactional Limit Check
+      if (numAmount > WITHDRAWAL_LIMITS.TRANSACTION) {
+        setValidationError(`Protocol Breach: Maximum transactional limit is $${WITHDRAWAL_LIMITS.TRANSACTION.toLocaleString()}. Please split the transfer.`);
+        return;
+      }
+
+      // 3. Daily Aggregate Limit Check
+      if (dailyWithdrawalTotal + numAmount > WITHDRAWAL_LIMITS.DAILY) {
+        setValidationError(`Protocol Breach: Daily withdrawal limit of $${WITHDRAWAL_LIMITS.DAILY.toLocaleString()} exceeded. Remaining allowance: $${remainingDailyLimit.toLocaleString()}`);
         return;
       }
     }
@@ -67,6 +94,9 @@ const TraderWallet: React.FC<TraderWalletProps> = ({ user, onUpdateUser, onAddTr
 
       if (activeTab === 'DEPOSIT') {
         onUpdateUser({ ...user, balance: (user.balance || 0) + numAmount });
+      } else {
+        // Track the withdrawal towards daily total
+        setDailyWithdrawalTotal(prev => prev + numAmount);
       }
 
       onAddTransaction(newTx);
@@ -180,6 +210,31 @@ const TraderWallet: React.FC<TraderWalletProps> = ({ user, onUpdateUser, onAddTr
               </div>
             ) : (
               <form onSubmit={handleTransaction} className="space-y-8">
+                {activeTab === 'WITHDRAWAL' && (
+                  <div className="p-6 bg-amber-500/5 border border-amber-500/10 rounded-3xl space-y-4 animate-in fade-in slide-in-from-top-2">
+                     <div className="flex items-center space-x-3 mb-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-amber-500"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg>
+                        <h4 className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Withdrawal Protocol Limits</h4>
+                     </div>
+                     <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-white/50 dark:bg-slate-950/40 p-4 rounded-2xl border border-slate-200/50 dark:border-slate-800/50">
+                           <div className="text-[9px] font-black uppercase text-slate-400 mb-1">Transactional Max</div>
+                           <div className="text-sm font-bold text-slate-900 dark:text-white">${WITHDRAWAL_LIMITS.TRANSACTION.toLocaleString()}</div>
+                        </div>
+                        <div className="bg-white/50 dark:bg-slate-950/40 p-4 rounded-2xl border border-slate-200/50 dark:border-slate-800/50">
+                           <div className="text-[9px] font-black uppercase text-slate-400 mb-1">Daily Limit Used</div>
+                           <div className="text-sm font-bold text-slate-900 dark:text-white">${dailyWithdrawalTotal.toLocaleString()} / ${WITHDRAWAL_LIMITS.DAILY.toLocaleString()}</div>
+                        </div>
+                     </div>
+                     <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full transition-all duration-1000 ${dailyWithdrawalTotal > WITHDRAWAL_LIMITS.DAILY * 0.8 ? 'bg-rose-500' : 'bg-sky-500'}`} 
+                          style={{ width: `${(dailyWithdrawalTotal / WITHDRAWAL_LIMITS.DAILY) * 100}%` }}
+                        ></div>
+                     </div>
+                  </div>
+                )}
+
                 {activeTab === 'DEPOSIT' ? (
                   <div className="p-6 bg-sky-500/5 border border-sky-500/10 rounded-2xl flex items-center justify-between">
                     <div>

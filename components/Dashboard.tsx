@@ -97,6 +97,10 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const totalPortfolioValue = useMemo(() => 
+    portfolioAllocation.reduce((acc, curr) => acc + curr.value, 0)
+  , []);
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-12 transition-colors">
       
@@ -262,7 +266,10 @@ const Dashboard: React.FC = () => {
                     boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'
                   }}
                   itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 'bold' }}
-                  formatter={(value: number) => [`$${value.toLocaleString()}`, 'Value']}
+                  formatter={(value: number, name: string) => {
+                    const percentage = ((value / totalPortfolioValue) * 100).toFixed(1);
+                    return [`$${value.toLocaleString()} (${percentage}%)`, name];
+                  }}
                 />
                 <Legend 
                   verticalAlign="middle" 
@@ -277,7 +284,7 @@ const Dashboard: React.FC = () => {
 
           <div className="grid grid-cols-2 gap-4">
             {portfolioAllocation.map((item) => {
-              const percentage = ((item.value / 142520) * 100).toFixed(1);
+              const percentage = ((item.value / totalPortfolioValue) * 100).toFixed(1);
               return (
                 <div key={item.name} className="p-6 bg-slate-50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-800/50 rounded-2xl group hover:border-sky-500/30 transition-all">
                   <div className="flex items-center space-x-3 mb-3">
